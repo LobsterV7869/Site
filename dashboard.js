@@ -1,4 +1,10 @@
 (() => {
+  if (window.top !== window.self) {
+    document.body.innerHTML = '<main style="max-width:36rem;margin:15vh auto;padding:2rem;font:16px/1.6 system-ui;text-align:center"><h1>Lobster dashboard</h1><p>For your safety, the dashboard cannot run inside an embedded frame.</p><a href="' +
+      window.location.href.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]) +
+      '" target="_top" rel="noopener noreferrer">Open the dashboard in its own tab</a></main>';
+    return;
+  }
   const API = (window.LOBSTER_API_BASE || window.location.origin).replace(/\/+$/, '');
   const SESSION_KEY = 'lobster_dashboard_token';
   const pageNames = {
@@ -318,7 +324,12 @@
   function securityPage() {
     const s = state.data.settings;
     return pageHeading('Security', 'Configure join protection and anti-nuke safeguards.') +
-      `<div class="grid"><div class="card">${cardHead('New member protection', 'Automatically review accounts when they join.')}` +
+      `<div class="grid"><div class="card">${cardHead('Join raid protection', 'Limit bursts of new joins without blocking the first wave.')}` +
+      sectionForm(toggle('joinRaidProtection.enabled', 'Enable join rate limit', 'Kick additional joiners after your server exceeds the limit.', s.joinRaidProtection.enabled) +
+        `<div class="form-row"><div class="field"><label for="f-joinRaidLimit">Maximum joins</label><input id="f-joinRaidLimit" name="joinRaidProtection.limit" type="number" min="2" max="100" data-type="number" value="${escapeHTML(s.joinRaidProtection.limit)}"></div>` +
+        `<div class="field"><label for="f-joinRaidWindow">Time window (seconds)</label><input id="f-joinRaidWindow" name="joinRaidProtection.windowSeconds" type="number" min="5" max="300" data-type="number" value="${escapeHTML(s.joinRaidProtection.windowSeconds)}"></div></div>` +
+        `<div class="hint warning">When the limit is exceeded, Lobster kicks each additional eligible newcomer until the time window passes. Enable only if you accept the risk of false positives during a legitimate influx. Requires Kick Members.</div>`) +
+      `</div><div class="card">${cardHead('New member protection', 'Automatically review accounts when they join.')}` +
       sectionForm(`<div class="field"><label for="f-minAccountAgeDays">Minimum account age (days)</label><input id="f-minAccountAgeDays" name="minAccountAgeDays" type="number" min="0" max="3650" data-type="number" value="${escapeHTML(s.minAccountAgeDays)}"><small class="field-help">Accounts younger than this are kicked. Set 0 to disable.</small></div>` +
         toggle('blockBots', 'Block bot accounts', 'Kick newly joined bots. Use carefully with other bots.', s.blockBots)) +
       `</div><div class="card">${cardHead('Anti-nuke', 'Kick a non-exempt member after a burst of protected server changes.')}` +
@@ -436,6 +447,9 @@
       } else if (name.startsWith('eventLogChannels.')) {
         payload.eventLogChannels ||= {};
         payload.eventLogChannels[name.slice('eventLogChannels.'.length)] = value || null;
+      } else if (name.startsWith('joinRaidProtection.')) {
+        payload.joinRaidProtection ||= {};
+        payload.joinRaidProtection[name.slice('joinRaidProtection.'.length)] = value;
       } else if (['autorole', 'welcomeChannel', 'farewellChannel', 'auditLogChannel', 'levelUpChannel', 'countingChannel', 'ticketChannel', 'ticketCategory', 'ticketAdminRole', 'ticketTranscriptChannel'].includes(name)) {
         payload[name] = value || null;
       } else {
