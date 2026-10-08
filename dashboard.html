@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f7f8fa">
+    <meta name="description" content="Manage your Discord server with the Lobster bot dashboard.">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://cdn.discordapp.com; connect-src 'self' https:; base-uri 'self'; object-src 'none'; frame-ancestors 'none'">
+    <title>Dashboard — Lobster</title>
+    <link rel="stylesheet" href="dashboard.css">
+    <script src="dashboard-config.js"></script>
+    <script src="dashboard.js" defer></script>
+  </head>
+  <body>
+    <div id="login-view" class="login-view">
+      <a class="login-brand" href="index.html"><span>🦞</span> LOBSTER</a>
+      <div class="login-card">
+        <div class="login-art" aria-hidden="true"><span>🦞</span><i></i><b></b></div>
+        <p class="eyebrow">YOUR SERVER, YOUR RULES</p>
+        <h1>A calmer way<br>to manage your community.</h1>
+        <p class="muted">Configure Lobster, manage server roles, and keep your community running smoothly.</p>
+        <button id="login-button" class="button primary large">Continue with Discord <span>→</span></button>
+        <p id="login-error" class="inline-error" role="alert" hidden></p>
+        <p class="login-footnote">Secure sign-in · We never see or store your Discord password</p>
+        <p class="login-footnote">The bot API must be online and configured in <code>dashboard-config.js</code>.</p>
+      </div>
+      <footer><a href="privacy-policy.html">Privacy</a><a href="terms-of-service.html">Terms</a><a href="index.html">Lobster home</a></footer>
+    </div>
+
+    <div id="app-view" class="app-shell" hidden>
+      <aside id="sidebar" class="sidebar">
+        <a class="sidebar-brand" href="index.html"><span>🦞</span> LOBSTER</a>
+        <div class="server-shortcut">
+          <div class="server-avatar">L</div>
+          <div><strong>Control panel</strong><small>Discord bot dashboard</small></div>
+        </div>
+        <div class="nav-label">WORKSPACE</div>
+        <nav id="navigation" class="navigation" aria-label="Dashboard pages">
+          <button class="nav-item active" data-page="overview"><span>◫</span> Overview</button>
+          <button class="nav-item" data-page="settings"><span>⚙</span> General settings</button>
+          <button class="nav-item" data-page="roles"><span>♙</span> Role manager</button>
+          <div class="nav-label nav-spaced">COMMUNITY</div>
+          <button class="nav-item" data-page="welcome"><span>✦</span> Welcome & farewell</button>
+          <button class="nav-item" data-page="automod"><span>⛨</span> Auto moderation</button>
+          <button class="nav-item" data-page="logs"><span>▤</span> Audit logs</button>
+          <button class="nav-item" data-page="levels"><span>↗</span> Level system</button>
+          <button class="nav-item" data-page="replies"><span>↳</span> Auto replies</button>
+          <button class="nav-item" data-page="security"><span>◈</span> Security</button>
+          <button class="nav-item" data-page="server"><span>☷</span> Server tools</button>
+        </nav>
+        <div class="sidebar-bottom">
+          <span class="status-dot"></span> Bot settings sync with Discord
+          <a href="privacy-policy.html">Privacy & terms</a>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <button id="mobile-menu" class="icon-button mobile-menu" aria-label="Toggle navigation">☰</button>
+          <div class="breadcrumbs"><span>Servers</span><b>/</b><strong id="breadcrumb-server">Select a server</strong></div>
+          <div class="top-actions">
+            <label class="server-select-label" for="guild-select">SERVER</label>
+            <select id="guild-select" aria-label="Select a Discord server"><option value="">Loading servers…</option></select>
+            <div id="user-menu" class="user-menu"></div>
+          </div>
+        </header>
+
+        <div id="content" class="content">
+          <div class="loading-state"><div class="spinner"></div><p>Connecting to Discord…</p></div>
+        </div>
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
+      </main>
+    </div>
+  </body>
+</html>
