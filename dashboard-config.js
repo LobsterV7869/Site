@@ -1,2 +1,2 @@
-// Set this to the HTTPS origin of the running Lobster bot API when it is separate from this site.
-window.LOBSTER_API_BASE = '';
+// Temporary ngrok URL for the locally hosted Lobster dashboard API.
+window.LOBSTER_API_BASE = 'https://patio-sizing-tinfoil.ngrok-free.dev';
