@@ -13,6 +13,7 @@
     roles: 'Role manager',
     welcome: 'Welcome & farewell',
     automod: 'Auto moderation',
+    verification: 'Verification',
     logs: 'Audit logs',
     levels: 'Level system',
     replies: 'Auto replies',
@@ -341,6 +342,27 @@
       `</div></div>`;
   }
 
+  function verificationPage() {
+    const s = state.data.settings;
+    return pageHeading('Member verification', 'Require new members to verify in Discord before receiving the verified role.') +
+      `<div class="grid"><div class="card">${cardHead('Verification setup', 'This is Discord-native button verification. It does not verify a person’s real-world identity or an external account.')}` +
+      sectionForm(toggle('verificationEnabled', 'Enable verification', 'Assign the unverified role to new members and let them claim the verified role from the panel.', s.verificationEnabled) +
+        selectField('verificationChannel', 'Verification panel channel', s.verificationChannel, channelOptions(s.verificationChannel, true, 'Select a channel')) +
+        selectField('verificationRole', 'Verified role', s.verificationRole, roleOptions(s.verificationRole, true, 'Select a role', true)) +
+        selectField('unverifiedRole', 'Unverified role', s.unverifiedRole, roleOptions(s.unverifiedRole, true, 'Select a role', true),
+          'Assigned to new members while they are waiting to verify. Configure restricted channel permissions for this role in Discord.') +
+        selectField('quarantineRole', 'Quarantine role (optional)', s.quarantineRole, roleOptions(s.quarantineRole, true, 'No quarantine role', true),
+          'Removed after successful verification, if the member has it.') +
+        selectField('verificationLogChannel', 'Verification log channel (optional)', s.verificationLogChannel, channelOptions(s.verificationLogChannel, true, 'No log channel')) +
+        `<input type="hidden" name="verificationLanguage" value="en">`) +
+      `<div class="form-actions"><button class="button secondary" type="button" data-action="verification-test-log">Send test log</button>` +
+      `<button class="button primary" type="button" data-action="verification-panel">Publish / update panel</button></div>` +
+      `<p class="field-help">Save settings and enable verification before publishing. Lobster needs Manage Roles and permission to send embeds in the selected channels.</p></div>` +
+      `<div class="card">${cardHead('External integrations', 'Hangar RP whitelist and network ban-sharing options are not available yet.')}` +
+      `<p class="muted">Lobster has no configured Hangar API or alliance integration. These features are intentionally not presented as working toggles and will stay unavailable until a supported integration is added.</p>` +
+      `<div class="hint">For reliable access control, also set your Discord channel permissions so the unverified role cannot view member-only channels.</div></div></div>`;
+  }
+
   function serverPage() {
     const s = state.data.settings;
     return pageHeading('Server tools', 'Configure counting and private support tickets.') +
@@ -403,6 +425,7 @@
     roles: roleManagerPage,
     welcome: welcomePage,
     automod: automodPage,
+    verification: verificationPage,
     logs: logsPage,
     levels: levelsPage,
     replies: repliesPage,
@@ -450,7 +473,7 @@
       } else if (name.startsWith('joinRaidProtection.')) {
         payload.joinRaidProtection ||= {};
         payload.joinRaidProtection[name.slice('joinRaidProtection.'.length)] = value;
-      } else if (['autorole', 'welcomeChannel', 'farewellChannel', 'auditLogChannel', 'levelUpChannel', 'countingChannel', 'ticketChannel', 'ticketCategory', 'ticketAdminRole', 'ticketTranscriptChannel'].includes(name)) {
+      } else if (['autorole', 'welcomeChannel', 'farewellChannel', 'auditLogChannel', 'levelUpChannel', 'countingChannel', 'ticketChannel', 'ticketCategory', 'ticketAdminRole', 'ticketTranscriptChannel', 'verificationChannel', 'verificationRole', 'unverifiedRole', 'quarantineRole', 'verificationLogChannel'].includes(name)) {
         payload[name] = value || null;
       } else {
         payload[name] = value;
@@ -525,7 +548,20 @@
     }
     const action = event.target.closest('[data-action]');
     if (!action) return;
-    if (action.dataset.action === 'logout') {
+    if (['verification-panel', 'verification-test-log'].includes(action.dataset.action)) {
+      action.disabled = true;
+      try {
+        const endpoint = action.dataset.action === 'verification-panel'
+          ? 'verification-panel'
+          : 'verification-test-log';
+        const result = await api(`/api/guilds/${encodeURIComponent(state.selectedGuild)}/${endpoint}`, { method: 'POST', body: '{}' });
+        showToast(result.message || 'Verification action completed.');
+      } catch (error) {
+        showToast(error.message, true);
+      } finally {
+        action.disabled = false;
+      }
+    } else if (action.dataset.action === 'logout') {
       try {
         await api('/api/auth/logout', { method: 'POST' });
         sessionStorage.removeItem(SESSION_KEY);
