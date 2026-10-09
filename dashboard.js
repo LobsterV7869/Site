@@ -215,24 +215,50 @@
 
   function overviewPage() {
     const { stats, settings, guild } = state.data;
-    const activeFeatures = [
-      settings.welcomeEnabled, settings.farewellEnabled, settings.automod,
-      settings.eventLogsEnabled, settings.levelsEnabled, settings.blockBots,
-      settings.antiNuke.enabled
-    ].filter(Boolean).length;
+    const features = [
+      ['automod', 'Auto moderation', Boolean(settings.automod), 'Message filters and spam protection.'],
+      ['welcome', 'Welcome messages', Boolean(settings.welcomeEnabled), 'Greet members when they join.'],
+      ['welcome', 'Farewell messages', Boolean(settings.farewellEnabled), 'Send a goodbye when members leave.'],
+      ['verification', 'Member verification', Boolean(settings.verificationEnabled), 'Gate new members behind Discord button verification.'],
+      ['logs', 'Server event logs', Boolean(settings.eventLogsEnabled), 'Record selected server events.'],
+      ['levels', 'Level system', Boolean(settings.levelsEnabled), 'Reward active members with XP.'],
+      ['security', 'Join raid protection', Boolean(settings.joinRaidProtection?.enabled), 'Limit bursts of new joins.'],
+      ['security', 'Anti-nuke protection', Boolean(settings.antiNuke?.enabled), 'React to configured high-risk server actions.'],
+      ['security', 'Minimum account age', Number(settings.minAccountAgeDays) > 0, Number(settings.minAccountAgeDays) > 0 ? `Require accounts to be at least ${settings.minAccountAgeDays} days old.` : 'No account-age restriction configured.'],
+      ['security', 'Bot account filter', Boolean(settings.blockBots), 'Block bot accounts from joining.'],
+      ['server', 'Counting channel', Boolean(settings.counting), 'Keep a running server count.'],
+      ['server', 'Ticket panel', Boolean(settings.ticketChannel), 'Open private support tickets.'],
+      ['replies', 'Automatic replies', Object.keys(state.data.autoReplies || {}).length > 0, `${Object.keys(state.data.autoReplies || {}).length} configured.`],
+      ['settings', 'Automatic member role', Boolean(settings.autorole), 'Assign a role when members join.']
+    ];
+    const activeFeatures = features.filter(([, , active]) => active).length;
+    const featureRows = features.map(([page, name, active, description]) =>
+      `<button class="feature-status" data-page="${page}"><span class="feature-status-dot ${active ? 'is-active' : ''}"></span>` +
+      `<span class="feature-status-copy"><strong>${escapeHTML(name)}</strong><small>${escapeHTML(description)}</small></span>` +
+      `<span class="feature-status-state">${active ? 'On' : 'Off'}</span></button>`
+    ).join('');
     return pageHeading(`Welcome, ${state.user.globalName || state.user.username}`, `Here is what is happening in ${guild.name}.`) +
-      `<div class="welcome-banner"><div><p class="eyebrow small">YOUR SERVER IS IN GOOD HANDS</p><h2>Meet your Lobster control room.</h2><p>Configure features, tune moderation, and keep your community welcoming.</p></div><button class="button primary" data-page="settings">Review settings →</button></div>` +
+      `<div class="welcome-banner"><div><p class="eyebrow small">YOUR SERVER IS IN GOOD HANDS</p><h2>Your Lobster control room.</h2><p>Check what is running, jump into a setting, and keep your community welcoming.</p></div><div class="welcome-banner-actions"><button class="button primary" data-page="settings">Review settings →</button><a class="button secondary" href="https://discord.gg/lobster" target="_blank" rel="noopener noreferrer">Get support ↗</a></div></div>` +
       `<div class="grid three quick-grid">` +
-      statCard('Server members', stats.members.toLocaleString(), '♙') +
-      statCard('Server roles', stats.roles.toLocaleString(), '♧') +
+      statCard('Server members', Number(stats.members || 0).toLocaleString(), '♙') +
+      statCard('Server channels', Number(stats.channels || 0).toLocaleString(), '▤') +
+      statCard('Server roles', Number(stats.roles || 0).toLocaleString(), '♧') +
       statCard('Active features', activeFeatures.toString(), '✦') +
+      statCard('Commands available', Number(stats.commands || 0).toLocaleString(), '⌘') +
+      statCard('Command prefix', settings.prefix || 'l', '›') +
       `</div><div class="grid quick-grid">` +
       quickAction('automod', 'Auto moderation', 'Set up spam and content filters.', '⛨') +
       quickAction('welcome', 'Welcome & farewell', 'Set up join and leave messages.', '✦') +
       quickAction('roles', 'Role manager', 'Edit names and colors for server roles.', '♙') +
+      quickAction('verification', 'Verification', 'Configure the member verification panel.', '✓') +
+      quickAction('security', 'Security & raid guards', 'Review join protection and anti-nuke controls.', '◈') +
+      quickAction('levels', 'Level system', 'Manage XP and level-up announcements.', '↗') +
       quickAction('logs', 'Audit logs', 'Choose which server events Lobster logs.', '▤') +
-      `</div><div class="card" style="margin-top:17px">${cardHead('Lobster status', 'The bot is connected to this server.')}` +
-      `<p class="muted"><span class="online-dot"></span> Online · ${stats.commands} commands available · Prefix <strong>${escapeHTML(settings.prefix)}</strong></p></div>`;
+      quickAction('server', 'Server tools & reaction roles', 'Configure server tools and member-selected roles.', '☷') +
+      `</div><section class="card overview-features">${cardHead('Feature status', `${activeFeatures} of ${features.length} features are enabled · Select a feature to configure it.`)}` +
+      `<div class="feature-status-grid">${featureRows}</div></section>` +
+      `<section class="card overview-bot-status">${cardHead('Lobster status', 'Live status for this selected server.')}` +
+      `<p class="muted"><span class="online-dot"></span> Connected to <strong>${escapeHTML(guild.name)}</strong> · Command prefix <strong>${escapeHTML(settings.prefix)}</strong></p></section>`;
   }
 
   function statCard(label, value, icon) {
@@ -272,46 +298,51 @@
   }
 
   const filters = [
-    ['links', 'Block links', 'Delete messages containing HTTP links.'],
-    ['invites', 'Block Discord invites', 'Delete messages containing Discord invite links.'],
-    ['advertisements', 'Block common ad phrases', 'Block configured common advertising phrases.'],
-    ['spam', 'Flood protection', 'Default: more than 5 messages in 10 seconds.'],
-    ['duplicate', 'Repeated messages', 'Delete repeated copies from the same member.'],
-    ['caps', 'Excessive capitals', 'Default: at least 70% uppercase letters.'],
-    ['emoji', 'Excessive emoji', 'Default: more than 6 emoji in a message.'],
-    ['mentions', 'Excessive mentions', 'Default: more than 3 user or role mentions.'],
-    ['longLines', 'Too many lines', 'Default: more than 6 lines.'],
-    ['longMessages', 'Long messages', 'Default: over 500 characters.'],
-    ['imageSpam', 'Image spam', 'Default: more than 5 images in one minute.']
+    ['links', 'Block links', 'Remove messages containing HTTP or HTTPS links.'],
+    ['invites', 'Block Discord invites', 'Remove messages containing Discord invite links.'],
+    ['advertisements', 'Block common ad phrases', 'Remove messages containing common promotional phrases.'],
+    ['spam', 'Flood protection', 'Remove messages when a member exceeds the message rate limit.'],
+    ['duplicate', 'Repeated messages', 'Remove repeated copies from the same member within a time window.'],
+    ['caps', 'Excessive capitals', 'Remove messages that exceed the uppercase percentage threshold.'],
+    ['emoji', 'Excessive emoji', 'Remove messages containing more emoji than the allowed limit.'],
+    ['mentions', 'Excessive mentions', 'Remove messages with too many user and role mentions.'],
+    ['longLines', 'Too many lines', 'Remove messages with more lines than the configured limit.'],
+    ['longMessages', 'Character limit', 'Remove messages that exceed the maximum character count.'],
+    ['imageSpam', 'Image spam', 'Remove image posts after the per-minute limit is exceeded.']
   ];
+
+  const automodThresholds = {
+    spam: [['spamLimit', 'Messages allowed', '3–20 messages.', 3, 20], ['spamWindowSeconds', 'Time window (seconds)', '2–60 seconds.', 2, 60]],
+    duplicate: [['duplicateLimit', 'Matching messages allowed', '2–5 copies.', 2, 5], ['duplicateWindowSeconds', 'Time window (seconds)', '10–3,600 seconds.', 10, 3600]],
+    caps: [['capsPercentage', 'Uppercase threshold (%)', '50–100%. Messages under 12 letters are ignored.', 50, 100]],
+    emoji: [['emojiLimit', 'Emoji allowed', '3–30 emoji.', 3, 30]],
+    mentions: [['mentionsLimit', 'Mentions allowed', '2–10 user and role mentions.', 2, 10]],
+    longLines: [['longLinesLimit', 'Lines allowed', '2–20 lines.', 2, 20]],
+    longMessages: [['longMessagesLimit', 'Characters allowed', '100–4,000 characters.', 100, 4000]],
+    imageSpam: [['imageSpamLimit', 'Images allowed per minute', '2–20 images.', 2, 20]]
+  };
 
   function automodPage() {
     const s = state.data.settings;
     const rules = s.automodRules;
-    const ruleToggles = filters.map(([key, title, description]) =>
-      toggle(`automodRules.${key}`, title, description, rules[key])
-    ).join('');
-    const thresholds = [
-      ['spamLimit', 'Messages per flood window', rules.spamLimit],
-      ['spamWindowSeconds', 'Flood window (seconds)', rules.spamWindowSeconds],
-      ['duplicateLimit', 'Duplicate message limit', rules.duplicateLimit],
-      ['capsPercentage', 'Uppercase threshold (%)', rules.capsPercentage],
-      ['emojiLimit', 'Emoji threshold', rules.emojiLimit],
-      ['mentionsLimit', 'Mention threshold', rules.mentionsLimit],
-      ['longMessagesLimit', 'Maximum characters', rules.longMessagesLimit],
-      ['longLinesLimit', 'Maximum lines', rules.longLinesLimit],
-      ['imageSpamLimit', 'Images per minute', rules.imageSpamLimit]
-    ].map(([key, label, value]) =>
-      `<div class="field"><label for="f-${key}">${escapeHTML(label)}</label><input id="f-${key}" type="number" name="automodRules.${key}" data-type="number" value="${escapeHTML(value)}"></div>`
-    ).join('');
-    return pageHeading('Auto moderation', 'Tune Lobster’s message filters. Staff with Manage Messages are exempt.') +
-      `<div class="grid"><div class="card">${cardHead('Filter settings', 'Choose the rules that should apply.')}` +
-      sectionForm(toggle('automod', 'Enable AutoMod', 'Apply the selected filters to member messages.', s.automod) +
-        ruleToggles +
-        `<div class="field"><label for="f-blockedWords">Blocked words</label><textarea id="f-blockedWords" name="automodRules.blockedWords">${escapeHTML(rules.blockedWords.join(', '))}</textarea><small class="field-help">Comma-separated. Matching is case-insensitive.</small></div>`) +
-      `</div><div class="card">${cardHead('Filter thresholds', 'Adjust the default limits.')}` +
-      sectionForm(`<div class="inline-controls">${thresholds}</div><div class="hint">Set an appropriate language-specific blocked word list for your community. Lobster does not enable a guessed profanity list by default.</div>`) +
-      `</div></div>`;
+    const ruleCards = filters.map(([key, title, description]) => {
+      const controls = (automodThresholds[key] || []).map(([controlKey, label, help, min, max]) =>
+        field(`automodRules.${controlKey}`, label, rules[controlKey], 'number', help,
+          `data-type="number" min="${min}" max="${max}" required`)
+      ).join('');
+      return `<article class="automod-rule-card"><div class="automod-rule-top">${toggle(`automodRules.${key}`, title, description, rules[key])}` +
+        `<span class="automod-rule-state ${rules[key] ? 'is-on' : ''}">${rules[key] ? 'On' : 'Off'}</span></div>` +
+        `${controls ? `<details class="automod-rule-settings"><summary>Configure rule</summary><div class="automod-rule-controls">${controls}</div></details>` : ''}</article>`;
+    }).join('');
+    return pageHeading('Auto moderation', 'Choose exactly what Lobster filters, then tune each rule to fit your community.') +
+      `<div class="card">${cardHead('Message moderation', 'Staff with Manage Messages or Administrator are exempt from these filters.')}` +
+      sectionForm(toggle('automod', 'Enable AutoMod', 'Apply the selected rules to member messages.', s.automod) +
+        `<div class="automod-rules-grid">${ruleCards}` +
+        `<article class="automod-rule-card automod-words-card"><div class="automod-rule-top"><div class="switch-copy"><strong>Custom blocked words</strong><small>Remove messages containing any phrase in your list, including profanity you choose to block.</small></div>` +
+        `<span class="automod-rule-state ${rules.blockedWords.length ? 'is-on' : ''}">${rules.blockedWords.length ? `${rules.blockedWords.length} added` : 'Not set'}</span></div>` +
+        `<div class="field"><label for="f-automodRules-blockedWords">Blocked words and phrases</label><textarea id="f-automodRules-blockedWords" name="automodRules.blockedWords" maxlength="5099" placeholder="Enter up to 50 comma-separated words or phrases">${escapeHTML(rules.blockedWords.join(', '))}</textarea><small class="field-help">Up to 50 entries, maximum 100 characters each. Matching ignores capitalization. Add language-specific terms yourself.</small></div></article></div>` +
+        `<div class="hint automod-note">The advertising filter matches a small built-in phrase list; use Custom blocked words for your server’s language. AutoMod removes matching messages and posts a short notice.</div>`) +
+      `</div>`;
   }
 
   const logCategories = [
@@ -347,19 +378,20 @@
 
   function securityPage() {
     const s = state.data.settings;
-    return pageHeading('Security', 'Configure join protection and anti-nuke safeguards.') +
+    return pageHeading('Security', 'Filter risky joins and protect important server changes.') +
       `<div class="grid"><div class="card">${cardHead('Join raid protection', 'Limit bursts of new joins without blocking the first wave.')}` +
       sectionForm(toggle('joinRaidProtection.enabled', 'Enable join rate limit', 'Kick additional joiners after your server exceeds the limit.', s.joinRaidProtection.enabled) +
         `<div class="form-row"><div class="field"><label for="f-joinRaidLimit">Maximum joins</label><input id="f-joinRaidLimit" name="joinRaidProtection.limit" type="number" min="2" max="100" data-type="number" value="${escapeHTML(s.joinRaidProtection.limit)}"></div>` +
         `<div class="field"><label for="f-joinRaidWindow">Time window (seconds)</label><input id="f-joinRaidWindow" name="joinRaidProtection.windowSeconds" type="number" min="5" max="300" data-type="number" value="${escapeHTML(s.joinRaidProtection.windowSeconds)}"></div></div>` +
         `<div class="hint warning">When the limit is exceeded, Lobster kicks each additional eligible newcomer until the time window passes. Enable only if you accept the risk of false positives during a legitimate influx. Requires Kick Members.</div>`) +
-      `</div><div class="card">${cardHead('New member protection', 'Automatically review accounts when they join.')}` +
+      `</div><div class="card">${cardHead('Account and bot filter', 'Apply these checks to each new member who joins.')}` +
       sectionForm(`<div class="field"><label for="f-minAccountAgeDays">Minimum account age (days)</label><input id="f-minAccountAgeDays" name="minAccountAgeDays" type="number" min="0" max="3650" data-type="number" value="${escapeHTML(s.minAccountAgeDays)}"><small class="field-help">Accounts younger than this are kicked. Set 0 to disable.</small></div>` +
         toggle('blockBots', 'Block bot accounts', 'Kick newly joined bots. Use carefully with other bots.', s.blockBots)) +
-      `</div><div class="card">${cardHead('Anti-nuke', 'Kick a non-exempt member after a burst of protected server changes.')}` +
+      `</div><div class="card">${cardHead('Anti-nuke protection', 'Kick a non-exempt member after a burst of protected server changes.')}` +
       sectionForm(toggle('antiNukeEnabled', 'Enable anti-nuke', 'Requires View Audit Log and Kick Members permissions for Lobster.', s.antiNuke.enabled) +
         `<div class="form-row"><div class="field"><label for="f-antiNukeLimit">Action limit</label><input id="f-antiNukeLimit" name="antiNukeLimit" type="number" min="2" max="100" data-type="number" value="${escapeHTML(s.antiNuke.limit)}"></div>` +
         `<div class="field"><label for="f-antiNukeWindowSeconds">Time window (seconds)</label><input id="f-antiNukeWindowSeconds" name="antiNukeWindowSeconds" type="number" min="2" max="3600" data-type="number" value="${escapeHTML(s.antiNuke.windowSeconds)}"></div></div>` +
+        `<div class="protection-scope"><strong>Actions monitored</strong><div class="protection-tags"><span>Role changes</span><span>Channel changes</span><span>Member bans and kicks</span><span>Member role changes</span><span>Webhook changes</span><span>Emoji changes</span></div><small class="field-help">All listed actions share the same threshold. The server owner and selected trusted roles are exempt.</small></div>` +
         `<div class="field"><label for="f-antiNukeExemptRoleIds">Trusted exempt roles</label><select id="f-antiNukeExemptRoleIds" name="antiNukeExemptRoleIds" multiple size="5">${(state.data.roles || []).filter(role => !role.managed).map(role => `<option value="${escapeHTML(role.id)}" ${s.antiNuke.exemptRoleIds.includes(role.id) ? 'selected' : ''}>${escapeHTML(role.name)}</option>`).join('')}</select><small class="field-help">Members with any selected role are excluded from anti-nuke enforcement. Use Ctrl/⌘ to select multiple roles.</small></div>` +
         `<div class="hint warning">Anti-nuke is disabled by default. Configure trusted staff and verify Lobster’s role hierarchy before enabling it.</div>`) +
       `</div></div>`;
@@ -388,7 +420,7 @@
 
   function serverPage() {
     const s = state.data.settings;
-    return pageHeading('Server tools', 'Configure counting and private support tickets.') +
+    return pageHeading('Server tools', 'Configure counting, support tickets, and member-selected roles.') +
       `<div class="grid"><div class="card">${cardHead('Counting channel', 'Members count upward one message at a time.')}` +
       sectionForm(toggle('counting', 'Enable counting', 'Track a single sequential number in the selected channel.', s.counting) +
         selectField('countingChannel', 'Counting channel', s.countingChannel, channelOptions(s.countingChannel)) +
@@ -400,6 +432,9 @@
         selectField('ticketTranscriptChannel', 'Private transcript channel', s.ticketTranscriptChannel, channelOptions(s.ticketTranscriptChannel, true, 'Transcripts disabled', true),
           'Transcripts include ticket messages and attachment URLs. Keep this channel private to staff.')) +
       `<div class="hint">Use <strong>/ticket-panel</strong> in Discord to create or update the public ticket panel and configure its text.</div>` +
+      `</div><div class="card">${cardHead('Emoji reaction roles', 'Let members choose roles by reacting to a Discord message.')}` +
+      `<p class="muted">Create a reaction role from Discord using <strong>/reactionrole add</strong>. Choose the channel, message, emoji, and role in the command options.</p>` +
+      `<div class="hint">Use <strong>/reactionrole list</strong> to review a message’s role mappings, or <strong>/reactionrole remove</strong> to remove one. Lobster needs Manage Roles, Read Message History, and Add Reactions, and its highest role must be above the roles it assigns.</div>` +
       `</div></div>`;
   }
 
@@ -640,6 +675,28 @@
     );
     document.getElementById('navigation').addEventListener('click', handleClick);
     content.addEventListener('click', handleClick);
+    content.addEventListener('change', event => {
+      const input = event.target;
+      if (input instanceof HTMLInputElement && input.type === 'checkbox'
+        && input.name.startsWith('automodRules.')) {
+        const badge = input.closest('.automod-rule-card')?.querySelector('.automod-rule-state');
+        if (badge) {
+          badge.textContent = input.checked ? 'On' : 'Off';
+          badge.classList.toggle('is-on', input.checked);
+        }
+      }
+    });
+    content.addEventListener('input', event => {
+      const input = event.target;
+      if (input instanceof HTMLTextAreaElement && input.name === 'automodRules.blockedWords') {
+        const badge = input.closest('.automod-rule-card')?.querySelector('.automod-rule-state');
+        const count = input.value.split(',').map(word => word.trim()).filter(Boolean).length;
+        if (badge) {
+          badge.textContent = count ? `${count} added` : 'Not set';
+          badge.classList.toggle('is-on', count > 0);
+        }
+      }
+    });
     content.addEventListener('submit', handleSubmit);
     document.getElementById('user-menu').addEventListener('click', handleClick);
     guildSelect.addEventListener('change', () => loadGuild(guildSelect.value));
