@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#0b0d1c">
     <meta name="description" content="Manage your Discord server with the Lobster bot dashboard.">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://cdn.discordapp.com; connect-src 'self' https:; base-uri 'self'; object-src 'none'; form-action 'self'">
+    <meta name="robots" content="noindex, nofollow">
     <title>Dashboard — Lobster</title>
     <link rel="stylesheet" href="dashboard.css">
     <script src="dashboard-config.js"></script>
@@ -13,7 +14,7 @@
   </head>
   <body>
     <div id="login-view" class="login-view">
-      <a class="login-brand" href="index.html"><span>🦞</span> LOBSTER</a>
+      <a class="login-brand" href="/"><span>🦞</span> LOBSTER</a>
       <div class="login-card">
         <div class="login-art" aria-hidden="true"><span>🦞</span><i></i><b></b></div>
         <p class="eyebrow">YOUR SERVER, YOUR RULES</p>
@@ -24,20 +25,20 @@
         <p class="login-footnote">Secure sign-in · We never see or store your Discord password</p>
         <p class="login-footnote">The bot API must be online and configured in <code>dashboard-config.js</code>.</p>
       </div>
-      <footer><a href="privacy-policy.html">Privacy</a><a href="terms-of-service.html">Terms</a><a href="index.html">Lobster home</a></footer>
+      <footer><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/">Home</a><a href="https://discord.gg/lobster" target="_blank" rel="noopener noreferrer">Support</a></footer>
     </div>
 
     <div id="app-view" class="app-shell" hidden>
       <aside id="sidebar" class="sidebar">
-        <a class="sidebar-brand" href="index.html"><span>🦞</span> LOBSTER</a>
+        <a class="sidebar-brand" href="/"><span>🦞</span> LOBSTER</a>
         <div class="server-shortcut">
           <div class="server-avatar">L</div>
           <div><strong>Control panel</strong><small>Discord bot dashboard</small></div>
         </div>
         <div class="nav-label">WORKSPACE</div>
         <nav id="navigation" class="navigation" aria-label="Dashboard pages">
-          <button class="nav-item active" data-page="overview"><span>◫</span> Overview</button>
-          <button class="nav-item" data-page="settings"><span>⚙</span> General settings</button>
+          <button class="nav-item active" data-page="overview"><span>⌂</span> Home</button>
+          <button class="nav-item" data-page="settings"><span>⚙</span> Settings</button>
           <button class="nav-item" data-page="roles"><span>♙</span> Role manager</button>
           <div class="nav-label nav-spaced">COMMUNITY</div>
           <button class="nav-item" data-page="welcome"><span>✦</span> Welcome & farewell</button>
@@ -51,7 +52,7 @@
         </nav>
         <div class="sidebar-bottom">
           <span class="status-dot"></span> Bot settings sync with Discord
-          <a href="privacy-policy.html">Privacy & terms</a>
+          <a href="/privacy">Privacy & terms</a>
         </div>
       </aside>
 

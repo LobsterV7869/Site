@@ -8,8 +8,8 @@
   const API = (window.LOBSTER_API_BASE || window.location.origin).replace(/\/+$/, '');
   const SESSION_KEY = 'lobster_dashboard_token';
   const pageNames = {
-    overview: 'Overview',
-    settings: 'General settings',
+    overview: 'Home',
+    settings: 'Settings',
     roles: 'Role manager',
     welcome: 'Welcome & farewell',
     automod: 'Auto moderation',
@@ -20,7 +20,26 @@
     security: 'Security',
     server: 'Server tools'
   };
-  const state = { user: null, guilds: [], selectedGuild: null, data: null, page: 'overview', toastTimer: null };
+  const directPages = {
+    '/settings': 'settings',
+    '/roles': 'roles',
+    '/welcome': 'welcome',
+    '/automod': 'automod',
+    '/verification': 'verification',
+    '/logs': 'logs',
+    '/levels': 'levels',
+    '/replies': 'replies',
+    '/security': 'security',
+    '/server': 'server'
+  };
+  const state = {
+    user: null,
+    guilds: [],
+    selectedGuild: null,
+    data: null,
+    page: directPages[window.location.pathname.replace(/\/+$/, '')] || 'overview',
+    toastTimer: null
+  };
   const loginView = document.getElementById('login-view');
   const appView = document.getElementById('app-view');
   const content = document.getElementById('content');
@@ -39,11 +58,15 @@
       ...options,
       headers: {
         ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        'ngrok-skip-browser-warning': 'true',
         ...(sessionStorage.getItem(SESSION_KEY) ? { Authorization: `Bearer ${sessionStorage.getItem(SESSION_KEY)}` } : {}),
         ...options.headers
       }
     }).then(async response => {
       if (response.status === 204) return null;
+      if (!response.headers.get('content-type')?.includes('application/json')) {
+        throw new Error(`The bot API at ${API} did not return JSON. Check that the bot and HTTPS tunnel are running.`);
+      }
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
         const error = new Error(result.error || `Request failed (${response.status}).`);
@@ -542,6 +565,8 @@
     const pageButton = event.target.closest('[data-page]');
     if (pageButton) {
       state.page = pageButton.dataset.page;
+      const route = state.page === 'overview' ? '/dashboard' : `/${state.page}`;
+      if (window.location.pathname !== route) history.pushState({}, '', route);
       document.getElementById('sidebar').classList.remove('open');
       render();
       return;
@@ -599,8 +624,16 @@
   }
 
   async function start() {
-    document.getElementById('login-button').addEventListener('click', () => {
-      window.location.href = `${API}/api/auth/login`;
+    document.getElementById('login-button').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const result = await api('/api/auth/login-url');
+        window.location.assign(result.authorizationUrl);
+      } catch (error) {
+        showLoginError(`Could not start Discord sign-in: ${error.message}`);
+        button.disabled = false;
+      }
     });
     document.getElementById('mobile-menu').addEventListener('click', () =>
       document.getElementById('sidebar').classList.toggle('open')
@@ -610,6 +643,10 @@
     content.addEventListener('submit', handleSubmit);
     document.getElementById('user-menu').addEventListener('click', handleClick);
     guildSelect.addEventListener('change', () => loadGuild(guildSelect.value));
+    window.addEventListener('popstate', () => {
+      state.page = directPages[window.location.pathname.replace(/\/+$/, '')] || 'overview';
+      if (state.data) render();
+    });
     document.addEventListener('keydown', event => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
@@ -649,7 +686,7 @@
       await loadGuild(state.selectedGuild);
     } catch (error) {
       showLogin(error.message === 'Failed to fetch'
-        ? 'Could not reach the Lobster dashboard API. Check dashboard-config.js and make sure the bot API is online.'
+        ? `Could not reach the Lobster dashboard API at ${API}. Make sure the bot and HTTPS tunnel are running.`
         : error.message);
     }
   }
