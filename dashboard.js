@@ -325,6 +325,12 @@
   function automodPage() {
     const s = state.data.settings;
     const rules = s.automodRules;
+    const exemptRoleOptions = (state.data.roles || []).filter(role => !role.managed).map(role =>
+      `<option value="${escapeHTML(role.id)}" ${rules.exemptRoleIds.includes(role.id) ? 'selected' : ''}>${escapeHTML(role.name)}</option>`
+    ).join('');
+    const exemptChannelOptions = (state.data.channels || []).map(channel =>
+      `<option value="${escapeHTML(channel.id)}" ${rules.exemptChannelIds.includes(channel.id) ? 'selected' : ''}>${channel.category ? `${escapeHTML(channel.category)} / ` : ''}#${escapeHTML(channel.name)}</option>`
+    ).join('');
     const ruleCards = filters.map(([key, title, description]) => {
       const controls = (automodThresholds[key] || []).map(([controlKey, label, help, min, max]) =>
         field(`automodRules.${controlKey}`, label, rules[controlKey], 'number', help,
@@ -340,7 +346,10 @@
         `<div class="automod-rules-grid">${ruleCards}` +
         `<article class="automod-rule-card automod-words-card"><div class="automod-rule-top"><div class="switch-copy"><strong>Custom blocked words</strong><small>Remove messages containing any phrase in your list, including profanity you choose to block.</small></div>` +
         `<span class="automod-rule-state ${rules.blockedWords.length ? 'is-on' : ''}">${rules.blockedWords.length ? `${rules.blockedWords.length} added` : 'Not set'}</span></div>` +
-        `<div class="field"><label for="f-automodRules-blockedWords">Blocked words and phrases</label><textarea id="f-automodRules-blockedWords" name="automodRules.blockedWords" maxlength="5099" placeholder="Enter up to 50 comma-separated words or phrases">${escapeHTML(rules.blockedWords.join(', '))}</textarea><small class="field-help">Up to 50 entries, maximum 100 characters each. Matching ignores capitalization. Add language-specific terms yourself.</small></div></article></div>` +
+        `<div class="field"><label for="f-automodRules-blockedWords">Blocked words and phrases</label><textarea id="f-automodRules-blockedWords" name="automodRules.blockedWords" maxlength="5099" placeholder="Enter up to 50 comma-separated words or phrases">${escapeHTML(rules.blockedWords.join(', '))}</textarea><small class="field-help">Up to 50 entries, maximum 100 characters each. Matching ignores capitalization. Add language-specific terms yourself.</small></div></article>` +
+        `<article class="automod-rule-card automod-exemptions-card"><div class="switch-copy"><strong>Trusted exemptions</strong><small>Skip message AutoMod for selected roles and channels; server administrators and members with Manage Messages already bypass it.</small></div>` +
+        `<div class="form-row"><div class="field"><label for="f-automodRules-exemptRoleIds">Exempt roles</label><select id="f-automodRules-exemptRoleIds" name="automodRules.exemptRoleIds" multiple size="6">${exemptRoleOptions}</select><small class="field-help">Members with any selected role bypass all message filters.</small></div>` +
+        `<div class="field"><label for="f-automodRules-exemptChannelIds">Exempt channels</label><select id="f-automodRules-exemptChannelIds" name="automodRules.exemptChannelIds" multiple size="6">${exemptChannelOptions}</select><small class="field-help">Messages in selected text and announcement channels bypass all filters. Hold Ctrl/⌘ to select multiple entries.</small></div></div></article></div>` +
         `<div class="hint automod-note">The advertising filter matches a small built-in phrase list; use Custom blocked words for your server’s language. AutoMod removes matching messages and posts a short notice.</div>`) +
       `</div>`;
   }
