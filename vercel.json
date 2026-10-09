@@ -2,20 +2,19 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/home", "destination": "/index.html" },
-    { "source": "/privacy", "destination": "/privacy-policy.html" },
-    { "source": "/terms", "destination": "/terms-of-service.html" },
-    { "source": "/dashboard", "destination": "/dashboard.html" },
-    { "source": "/settings", "destination": "/dashboard.html" },
-    { "source": "/roles", "destination": "/dashboard.html" },
-    { "source": "/welcome", "destination": "/dashboard.html" },
-    { "source": "/automod", "destination": "/dashboard.html" },
-    { "source": "/verification", "destination": "/dashboard.html" },
-    { "source": "/logs", "destination": "/dashboard.html" },
-    { "source": "/levels", "destination": "/dashboard.html" },
-    { "source": "/replies", "destination": "/dashboard.html" },
-    { "source": "/security", "destination": "/dashboard.html" },
-    { "source": "/server", "destination": "/dashboard.html" }
+    { "source": "/home", "destination": "/" },
+    { "source": "/privacy", "destination": "/privacy-policy" },
+    { "source": "/terms", "destination": "/terms-of-service" },
+    { "source": "/settings", "destination": "/dashboard" },
+    { "source": "/roles", "destination": "/dashboard" },
+    { "source": "/welcome", "destination": "/dashboard" },
+    { "source": "/automod", "destination": "/dashboard" },
+    { "source": "/verification", "destination": "/dashboard" },
+    { "source": "/logs", "destination": "/dashboard" },
+    { "source": "/levels", "destination": "/dashboard" },
+    { "source": "/replies", "destination": "/dashboard" },
+    { "source": "/security", "destination": "/dashboard" },
+    { "source": "/server", "destination": "/dashboard" }
   ],
   "headers": [
     {
