@@ -91,6 +91,13 @@
     error.hidden = false;
   }
 
+  function setLoginApiStatus(message, status) {
+    const indicator = document.querySelector('.login-api-status');
+    document.getElementById('login-api-status-text').textContent = message;
+    indicator.classList.toggle('is-ready', status === 'ready');
+    indicator.classList.toggle('is-error', status === 'error');
+  }
+
   function showApp() {
     loginView.hidden = true;
     appView.hidden = false;
@@ -740,8 +747,10 @@
       const health = await api('/api/health');
       if (!health.configured) {
         document.getElementById('login-button').disabled = true;
+        setLoginApiStatus('Dashboard sign-in is not configured on the bot host.', 'error');
         return showLoginError('The dashboard API is online but Discord OAuth is not configured on the bot host yet.');
       }
+      setLoginApiStatus('Lobster API connected and ready.', 'ready');
       const result = await api('/api/auth/me');
       if (!result.user) return showLogin();
       state.user = result.user;
@@ -751,6 +760,9 @@
       renderGuildSelect();
       await loadGuild(state.selectedGuild);
     } catch (error) {
+      if (error.message === 'Failed to fetch') {
+        setLoginApiStatus('Lobster API is offline. The bot and secure tunnel must be running.', 'error');
+      }
       showLogin(error.message === 'Failed to fetch'
         ? `Could not reach the Lobster dashboard API at ${API}. Make sure the bot and HTTPS tunnel are running.`
         : error.message);
