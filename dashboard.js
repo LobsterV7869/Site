@@ -7,6 +7,27 @@
   }
   const API = (window.LOBSTER_API_BASE || window.location.origin).replace(/\/+$/, '');
   const SESSION_KEY = 'lobster_dashboard_token';
+  function getSessionToken() {
+    const token = localStorage.getItem(SESSION_KEY);
+    if (token) return token;
+    const legacyToken = sessionStorage.getItem(SESSION_KEY);
+    if (legacyToken) {
+      localStorage.setItem(SESSION_KEY, legacyToken);
+      sessionStorage.removeItem(SESSION_KEY);
+    }
+    return legacyToken;
+  }
+
+  function saveSessionToken(token) {
+    localStorage.setItem(SESSION_KEY, token);
+    sessionStorage.removeItem(SESSION_KEY);
+  }
+
+  function clearSessionToken() {
+    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
+  }
+
   const pageNames = {
     overview: 'Home',
     settings: 'Settings',
@@ -53,13 +74,14 @@
   }
 
   function api(path, options = {}) {
+    const token = getSessionToken();
     return fetch(`${API}${path}`, {
       credentials: 'omit',
       ...options,
       headers: {
         ...(options.body ? { 'Content-Type': 'application/json' } : {}),
         'ngrok-skip-browser-warning': 'true',
-        ...(sessionStorage.getItem(SESSION_KEY) ? { Authorization: `Bearer ${sessionStorage.getItem(SESSION_KEY)}` } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers
       }
     }).then(async response => {
@@ -69,6 +91,7 @@
       }
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (response.status === 401) clearSessionToken();
         const error = new Error(result.error || `Request failed (${response.status}).`);
         error.status = response.status;
         throw error;
@@ -640,7 +663,7 @@
     } else if (action.dataset.action === 'logout') {
       try {
         await api('/api/auth/logout', { method: 'POST' });
-        sessionStorage.removeItem(SESSION_KEY);
+        clearSessionToken();
         state.user = null;
         state.guilds = [];
         state.data = null;
@@ -740,7 +763,7 @@
           method: 'POST',
           body: JSON.stringify({ code: exchangeCode })
         });
-        sessionStorage.setItem(SESSION_KEY, exchanged.token);
+        saveSessionToken(exchanged.token);
       } else if (window.location.hash) {
         history.replaceState({}, '', window.location.pathname + window.location.search);
       }
@@ -752,7 +775,10 @@
       }
       setLoginApiStatus('Lobster API connected and ready.', 'ready');
       const result = await api('/api/auth/me');
-      if (!result.user) return showLogin();
+      if (!result.user) {
+        clearSessionToken();
+        return showLogin();
+      }
       state.user = result.user;
       showApp();
       renderUser();
