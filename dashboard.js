@@ -39,6 +39,7 @@
     levels: 'Level system',
     replies: 'Auto replies',
     security: 'Security',
+    voice: 'Voice manager',
     server: 'Server tools'
   };
   const directPages = {
@@ -51,6 +52,7 @@
     '/levels': 'levels',
     '/replies': 'replies',
     '/security': 'security',
+    '/voice': 'voice',
     '/server': 'server'
   };
   const state = {
@@ -87,7 +89,7 @@
     }).then(async response => {
       if (response.status === 204) return null;
       if (!response.headers.get('content-type')?.includes('application/json')) {
-        throw new Error(`The bot API at ${API} did not return JSON. Check that the bot and HTTPS tunnel are running.`);
+        throw new Error(`The Lobster API at ${API} did not return JSON. Check that the bot host and its HTTPS API are running.`);
       }
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -258,6 +260,7 @@
       ['security', 'Bot account filter', Boolean(settings.blockBots), 'Block bot accounts from joining.'],
       ['server', 'Counting channel', Boolean(settings.counting), 'Keep a running server count.'],
       ['server', 'Ticket panel', Boolean(settings.ticketChannel), 'Open private support tickets.'],
+      ['voice', 'Voice connection', Boolean(state.data.voice?.connected), state.data.voice?.connected ? `Lobster is in ${state.data.voice.channelName || 'a voice channel'}.` : 'Lobster is not in a voice channel.'],
       ['replies', 'Automatic replies', Object.keys(state.data.autoReplies || {}).length > 0, `${Object.keys(state.data.autoReplies || {}).length} configured.`],
       ['settings', 'Automatic member role', Boolean(settings.autorole), 'Assign a role when members join.']
     ];
@@ -284,6 +287,7 @@
       quickAction('security', 'Security & raid guards', 'Review join protection and anti-nuke controls.', '◈') +
       quickAction('levels', 'Level system', 'Manage XP and level-up announcements.', '↗') +
       quickAction('logs', 'Audit logs', 'Choose which server events Lobster logs.', '▤') +
+      quickAction('voice', 'Voice manager', 'Connect the Lobster bot to a voice channel.', '🔊') +
       quickAction('server', 'Server tools & reaction roles', 'Configure server tools and member-selected roles.', '☷') +
       `</div><section class="card overview-features">${cardHead('Feature status', `${activeFeatures} of ${features.length} features are enabled · Select a feature to configure it.`)}` +
       `<div class="feature-status-grid">${featureRows}</div></section>` +
@@ -477,6 +481,39 @@
       `</div></div>`;
   }
 
+  function voicePage() {
+    const voice = state.data.voice || {};
+    const channels = state.data.voiceChannels || [];
+    const connected = Boolean(voice.connected);
+    const busy = ['connecting', 'signalling'].includes(voice.status);
+    const statusText = connected
+      ? `Connected to ${escapeHTML(voice.channelName || voice.channelId || 'a voice channel')}`
+      : busy
+        ? 'Connecting…'
+        : 'Not connected to a voice channel.';
+    const options = '<option value="">Select a voice channel</option>' +
+      channels.map(channel =>
+        `<option value="${escapeHTML(channel.id)}" ${channel.id === voice.channelId ? 'selected' : ''}>` +
+        `${channel.category ? `${escapeHTML(channel.category)} / ` : ''}🔊 ${escapeHTML(channel.name)}${channel.userLimit ? ` · ${channel.userLimit} member limit` : ''}</option>`
+      ).join('');
+    return pageHeading('Voice manager', 'Connect the official Lobster bot account to a voice channel in this server.') +
+      `<div class="grid"><div class="card">${cardHead('Connection', 'Lobster joins voice with its own bot account. No user account tokens are requested, used, or stored.')}` +
+      `<p class="muted"><span class="online-dot ${connected ? '' : 'is-offline'}"></span>${statusText}</p>` +
+      `${channels.length
+        ? `<div class="field"><label for="f-voice-channel">Voice channel</label><select id="f-voice-channel" ${connected ? 'disabled' : ''}>${options}</select>` +
+          `<small class="field-help">Lobster needs View Channel, Connect, and Speak permissions in the selected channel.</small></div>`
+        : '<div class="hint warning">No voice channels are visible in this server, or Lobster cannot see them. Check channel permissions.</div>'}` +
+      `<div class="form-actions">` +
+      `<button class="button primary" type="button" data-action="voice-connect" ${connected || busy || !channels.length ? 'disabled' : ''}>Connect</button>` +
+      `<button class="button danger" type="button" data-action="voice-disconnect" ${connected || busy ? '' : 'disabled'}>Disconnect</button>` +
+      `</div></div>` +
+      `<div class="card">${cardHead('Auto-reconnect', 'Rejoin the saved channel automatically if the connection drops.')}` +
+      `<div class="switch-row"><div class="switch-copy"><strong>Auto-reconnect</strong><small>Remember this channel and rejoin it after a disconnect or bot restart.</small></div>` +
+      `<label class="switch"><input type="checkbox" id="voice-auto-reconnect" ${voice.autoReconnect ? 'checked' : ''} aria-label="Auto-reconnect"><span></span></label></div>` +
+      `<div class="hint">Auto-reconnect is stored per server. Lobster rejoins the saved channel only when this option is enabled and a channel is saved.</div>` +
+      `</div></div>`;
+  }
+
   function roleManagerPage() {
     const roles = state.data.roles || [];
     const editableRoles = roles.filter(role => role.editable && !role.managed);
@@ -527,6 +564,7 @@
     levels: levelsPage,
     replies: repliesPage,
     security: securityPage,
+    voice: voicePage,
     server: serverPage
   };
 
@@ -660,6 +698,23 @@
       } finally {
         action.disabled = false;
       }
+    } else if (['voice-connect', 'voice-disconnect'].includes(action.dataset.action)) {
+      const isConnect = action.dataset.action === 'voice-connect';
+      const channelId = document.getElementById('f-voice-channel')?.value;
+      if (isConnect && !channelId) return showToast('Choose a voice channel first.', true);
+      action.disabled = true;
+      try {
+        const result = await api(`/api/guilds/${encodeURIComponent(state.selectedGuild)}/voice/${isConnect ? 'connect' : 'disconnect'}`, {
+          method: 'POST',
+          body: JSON.stringify(isConnect ? { channelId } : {})
+        });
+        state.data.voice = result.voice;
+        render();
+        showToast(result.message || (isConnect ? 'Connected.' : 'Disconnected.'));
+      } catch (error) {
+        action.disabled = false;
+        showToast(error.message, true);
+      }
     } else if (action.dataset.action === 'logout') {
       try {
         await api('/api/auth/logout', { method: 'POST' });
@@ -714,8 +769,26 @@
     );
     document.getElementById('navigation').addEventListener('click', handleClick);
     content.addEventListener('click', handleClick);
-    content.addEventListener('change', event => {
+    content.addEventListener('change', async event => {
       const input = event.target;
+      if (input instanceof HTMLInputElement && input.id === 'voice-auto-reconnect') {
+        const enabled = input.checked;
+        input.disabled = true;
+        try {
+          const result = await api(`/api/guilds/${encodeURIComponent(state.selectedGuild)}/voice/auto-reconnect`, {
+            method: 'PATCH',
+            body: JSON.stringify({ enabled })
+          });
+          state.data.voice = result.voice;
+          showToast(result.message || 'Auto-reconnect updated.');
+        } catch (error) {
+          input.checked = !enabled;
+          showToast(error.message, true);
+        } finally {
+          input.disabled = false;
+        }
+        return;
+      }
       if (input instanceof HTMLInputElement && input.type === 'checkbox'
         && input.name.startsWith('automodRules.')) {
         const badge = input.closest('.automod-rule-card')?.querySelector('.automod-rule-state');
@@ -786,11 +859,11 @@
       renderGuildSelect();
       await loadGuild(state.selectedGuild);
     } catch (error) {
-      if (error.message === 'Failed to fetch') {
-        setLoginApiStatus('Lobster API is offline. The bot and secure tunnel must be running.', 'error');
+      if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
+        setLoginApiStatus('Lobster API is offline. The bot host and its HTTPS API must be running.', 'error');
       }
-      showLogin(error.message === 'Failed to fetch'
-        ? `Could not reach the Lobster dashboard API at ${API}. Make sure the bot and HTTPS tunnel are running.`
+      showLogin(error.message === 'Failed to fetch' || error.name === 'TypeError'
+        ? `Could not reach the Lobster dashboard API at ${API}. Make sure the bot host and its HTTPS API are running and that this dashboard origin is allowed.`
         : error.message);
     }
   }

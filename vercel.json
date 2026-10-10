@@ -14,6 +14,7 @@
     { "source": "/levels", "destination": "/dashboard" },
     { "source": "/replies", "destination": "/dashboard" },
     { "source": "/security", "destination": "/dashboard" },
+    { "source": "/voice", "destination": "/dashboard" },
     { "source": "/server", "destination": "/dashboard" }
   ],
   "headers": [

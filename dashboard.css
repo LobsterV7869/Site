@@ -64,6 +64,7 @@ a { color: inherit; }
 .nav-item.active span { color: #ff986f; }
 .sidebar-bottom { margin-top: auto; padding: 15px 10px 4px; border-top: 1px solid #ffffff12; color: #8992a1; font-size: 10px; }
 .status-dot, .online-dot { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: #43c58b; }
+.online-dot.is-offline { background: #c84639; }
 .sidebar-bottom a { display: block; margin-top: 10px; color: #c0c5cf; text-decoration: none; }
 
 .main-area { min-height: 100vh; margin-left: 248px; }
