@@ -10,7 +10,7 @@
 (function () {
   'use strict';
 
-  var PRODUCTION_API_BASE = 'https://api.lobster.example';
+  var PRODUCTION_API_BASE = 'https://147.15.145.250.sslip.io';
 
   var host = window.location.hostname;
   var isLocal = host === '' || host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
