@@ -148,6 +148,13 @@ a { color: inherit; }
 .role-color-input { width: 38px; height: 31px; padding: 2px; border: 1px solid var(--line); border-radius: 5px; }
 .role-edit-actions { display: flex; gap: 5px; }
 .button.small { min-height: 31px; padding: 5px 9px; font-size: 10px; }
+.cleanup-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px 14px; max-height: 340px; overflow-y: auto; }
+.cleanup-row { display: flex; align-items: center; gap: 9px; padding: 8px 0; border-top: 1px solid #f0f1f3; cursor: pointer; }
+.cleanup-row:first-child { border-top: 0; }
+.cleanup-row input { width: 16px; height: 16px; flex: 0 0 16px; accent-color: #e5484d; }
+.cleanup-row span { display: grid; min-width: 0; }
+.cleanup-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.cleanup-row small { color: var(--muted); font-size: 10px; }
 .bot-tag { padding: 3px 6px; border-radius: 4px; background: #f0f1f3; color: #777f8c; font-size: 9px; }
 .empty-state { padding: 32px 16px; color: var(--muted); text-align: center; }
 .empty-state strong { display: block; margin-bottom: 4px; color: var(--ink); }
@@ -353,7 +360,7 @@ body {
   border-color: #343650;
   background: #0c1020;
 }
-.switch-row, .form-actions, .role-card { border-color: #292b43; }
+.switch-row, .form-actions, .role-card, .cleanup-row { border-color: #292b43; }
 .switch-copy strong { color: #ece9fa; }
 .switch-copy small, .field-help { color: #999fb8; }
 .switch span { background: #4d5268; }

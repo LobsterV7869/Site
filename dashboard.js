@@ -32,6 +32,7 @@
     overview: 'Home',
     settings: 'Settings',
     roles: 'Role manager',
+    cleanup: 'Server cleanup',
     welcome: 'Welcome & farewell',
     automod: 'Auto moderation',
     verification: 'Verification',
@@ -45,6 +46,7 @@
   const directPages = {
     '/settings': 'settings',
     '/roles': 'roles',
+    '/cleanup': 'cleanup',
     '/welcome': 'welcome',
     '/automod': 'automod',
     '/verification': 'verification',
@@ -605,6 +607,33 @@
       `<p class="muted">To move Lobster’s role, change the bot role order in Server Settings → Roles in Discord.</p></div></div></div>`;
   }
 
+  function cleanupPage() {
+    const channels = state.data.channels || [];
+    const voiceChannels = state.data.voiceChannels || [];
+    const categories = state.data.categories || [];
+    const roles = (state.data.roles || []).filter(role => role.editable && !role.managed);
+    const row = (kind, id, name, meta) =>
+      `<label class="cleanup-row"><input type="checkbox" class="cleanup-check" data-kind="${kind}" value="${escapeHTML(id)}">` +
+      `<span><strong>${escapeHTML(name)}</strong><small>${escapeHTML(meta)}</small></span></label>`;
+    const channelRows = [
+      ...channels.map(channel => row('channel', channel.id, `#${channel.name}`, channel.category ? `Text · ${channel.category}` : 'Text')),
+      ...voiceChannels.map(channel => row('channel', channel.id, `🔊 ${channel.name}`, channel.category ? `Voice · ${channel.category}` : 'Voice')),
+      ...categories.map(channel => row('channel', channel.id, `📂 ${channel.name}`, 'Category'))
+    ].join('');
+    const roleRows = roles.map(role => row('role', role.id, `@${role.name}`, role.color)).join('');
+    return pageHeading('Server cleanup', 'Delete specific channels and roles you select. This cannot be undone.') +
+      `<div class="card warning">${cardHead('Deletion is permanent')}` +
+      `<p class="muted">Select only what you want to remove. Deleting a role removes it from every member who has it; deleting a category does not delete the channels inside it. Nothing is selected by default, and there is no undo.</p></div>` +
+      `<div class="grid"><div class="card">${cardHead(`Channels · ${channels.length + voiceChannels.length + categories.length}`, 'Text, voice, and category channels that Lobster can delete.')}` +
+      `<div class="cleanup-list">${channelRows || '<div class="empty-state">No channels available to delete.</div>'}</div></div>` +
+      `<div class="card">${cardHead(`Roles · ${roles.length}`, 'Managed roles and roles above Lobster are excluded.')}` +
+      `<div class="cleanup-list">${roleRows || '<div class="empty-state">No editable roles available.</div>'}</div></div></div>` +
+      `<div class="card">${cardHead('Confirm deletion')}` +
+      `<p class="muted">Selected channels and roles are deleted immediately. Type the server name to enable the button.</p>` +
+      `<div class="field"><label for="cleanup-confirm">Server name</label><input id="cleanup-confirm" type="text" autocomplete="off" placeholder="${escapeHTML(state.data.guild.name)}"><small class="field-help">Type <strong>${escapeHTML(state.data.guild.name)}</strong> exactly.</small></div>` +
+      `<div class="form-actions"><button class="button danger" type="button" data-action="run-cleanup" disabled>Delete selected</button></div></div>`;
+  }
+
   function repliesPage() {
     const replies = state.data.autoReplies || {};
     const list = Object.entries(replies).map(([trigger, response]) =>
@@ -623,6 +652,7 @@
     overview: overviewPage,
     settings: settingsPage,
     roles: roleManagerPage,
+    cleanup: cleanupPage,
     welcome: welcomePage,
     automod: automodPage,
     verification: verificationPage,
@@ -927,6 +957,30 @@
         action.disabled = false;
         showToast(error.message, true);
       }
+    } else if (action.dataset.action === 'run-cleanup') {
+      const checks = [...document.querySelectorAll('.cleanup-check')].filter(input => input.checked);
+      if (!checks.length) return showToast('Select at least one channel or role.', true);
+      const confirmInput = document.getElementById('cleanup-confirm');
+      if (!confirmInput || confirmInput.value.trim() !== state.data.guild.name) {
+        return showToast('Type the server name to confirm.', true);
+      }
+      const channels = checks.filter(input => input.dataset.kind === 'channel').map(input => input.value);
+      const roles = checks.filter(input => input.dataset.kind === 'role').map(input => input.value);
+      action.disabled = true;
+      try {
+        const result = await api(`/api/guilds/${encodeURIComponent(state.selectedGuild)}/cleanup`, {
+          method: 'POST',
+          body: JSON.stringify({ channels, roles, confirm: confirmInput.value.trim() })
+        });
+        const removed = result.deleted.channels.length + result.deleted.roles.length;
+        const failed = result.failed.length;
+        showToast(`Deleted ${removed} item${removed === 1 ? '' : 's'}${failed ? ` · ${failed} failed` : ''}.`);
+        await loadGuild(state.selectedGuild);
+        render();
+      } catch (error) {
+        action.disabled = false;
+        showToast(error.message, true);
+      }
     } else if (action.dataset.action === 'delete-reply') {
       try {
         const result = await api(`/api/guilds/${encodeURIComponent(state.selectedGuild)}/auto-replies`, {
@@ -990,6 +1044,10 @@
     });
     content.addEventListener('input', event => {
       const input = event.target;
+      if (input instanceof HTMLInputElement && input.id === 'cleanup-confirm') {
+        const button = document.querySelector('[data-action="run-cleanup"]');
+        if (button) button.disabled = input.value.trim() !== state.data?.guild?.name;
+      }
       if (input instanceof HTMLTextAreaElement && input.name === 'automodRules.blockedWords') {
         const badge = input.closest('.automod-rule-card')?.querySelector('.automod-rule-state');
         const count = input.value.split(',').map(word => word.trim()).filter(Boolean).length;
