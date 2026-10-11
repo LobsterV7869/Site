@@ -76,6 +76,36 @@
     })[character]);
   }
 
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+  }
+
+  async function downloadRecording(session, file) {
+    const token = getSessionToken();
+    const response = await fetch(`${API}/api/guilds/${encodeURIComponent(state.selectedGuild)}/voice/recordings/${encodeURIComponent(session)}/${encodeURIComponent(file)}`, {
+      headers: {
+        'ngrok-skip-browser-warning': 'true',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+    if (!response.ok) {
+      if (response.status === 401) clearSessionToken();
+      throw new Error(`Could not download the recording (${response.status}).`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${state.selectedGuild}-${file}`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   function api(path, options = {}) {
     const token = getSessionToken();
     return fetch(`${API}${path}`, {
@@ -483,39 +513,66 @@
       `</div></div>`;
   }
 
+  function recordingsList(recordings) {
+    if (!recordings || !recordings.length) {
+      return '<div class="empty-state"><strong>No recordings yet</strong>Start a recording to capture the current voice channel.</div>';
+    }
+    return recordings.map(session => {
+      const heading = session.startedAt ? new Date(session.startedAt).toLocaleString() : escapeHTML(session.id);
+      const files = session.files.map(file =>
+        `<div class="switch-row"><div class="switch-copy"><strong>${escapeHTML(file.name || file.userId)}</strong>` +
+        `<small>${formatBytes(file.size)}</small></div>` +
+        `<button class="button secondary small" type="button" data-action="download-recording" data-session="${escapeHTML(session.id)}" data-file="${escapeHTML(file.file)}">Download</button></div>`
+      ).join('');
+      return `<div class="recording-session"><p class="muted"><strong>${escapeHTML(heading)}</strong></p>${files}</div>`;
+    }).join('');
+  }
+
   function voicePage() {
     const voice = state.data.voice || {};
     const channels = state.data.voiceChannels || [];
+    const recordings = state.data.voiceRecordings || [];
     const connected = Boolean(voice.connected);
     const busy = ['connecting', 'signalling'].includes(voice.status);
+    const recording = voice.recording || { active: false };
     const statusText = connected
       ? `Connected to ${escapeHTML(voice.channelName || voice.channelId || 'a voice channel')}`
       : busy
         ? 'Connecting… Lobster is negotiating the voice connection.'
         : 'Not connected to a voice channel.';
     const channelId = voice.channelId || '';
-    const options = '<option value="">Select a visible voice channel…</option>' +
+    const options = '<option value="">Select a voice channel…</option>' +
       channels.map(channel =>
         `<option value="${escapeHTML(channel.id)}" ${channel.id === channelId ? 'selected' : ''}>` +
         `${channel.category ? `${escapeHTML(channel.category)} / ` : ''}🔊 ${escapeHTML(channel.name)}${channel.userLimit ? ` · ${channel.userLimit} member limit` : ''}</option>`
       ).join('');
-    return pageHeading('Voice joiner', 'Connect the official Lobster bot account to a voice channel using its Server ID and Voice Channel ID.') +
+    const channelField = channels.length
+      ? `<div class="field"><label for="f-voice-channel">Voice channel</label><select id="f-voice-channel" ${connected ? 'disabled' : ''}>${options}</select>` +
+        `<small class="field-help">Lobster needs View Channel, Connect, and Speak permissions in the channel you pick.</small></div>`
+      : '<div class="hint warning">No voice channels are visible to Lobster in this server. Check that Lobster has View Channel and Connect permissions.</div>';
+    return pageHeading('Voice joiner', 'Connect the official Lobster bot to a voice channel, control its microphone and deafen state, and record the conversation.') +
       `<div class="grid"><div class="card">${cardHead('Connection', 'Lobster joins voice with its own official bot account through Discord’s gateway. No user-account tokens are requested, used, or stored.')}` +
       `<p id="voice-status" class="muted" aria-live="polite"><span class="online-dot ${connected ? '' : 'is-offline'}"></span>${statusText}</p>` +
-      `<div class="field"><label for="f-voice-server-id">Server ID</label>` +
-      `<input id="f-voice-server-id" type="text" value="${escapeHTML(state.selectedGuild)}" inputmode="numeric" pattern="[0-9]{17,20}" autocomplete="off" spellcheck="false" ${connected ? 'disabled' : ''}>` +
-      `<small class="field-help">Pre-filled with the server selected at the top. A 17–20 digit Discord server (guild) ID.</small></div>` +
-      `<div class="field"><label for="f-voice-channel-id">Voice Channel ID</label>` +
-      `<input id="f-voice-channel-id" type="text" value="${escapeHTML(channelId)}" inputmode="numeric" pattern="[0-9]{17,20}" autocomplete="off" spellcheck="false" ${connected ? 'disabled' : ''}>` +
-      `<small class="field-help">Right-click a voice channel in Discord with Developer Mode on → Copy Channel ID.</small></div>` +
-      `${channels.length
-        ? `<div class="field"><label for="f-voice-channel">Pick a visible channel</label><select id="f-voice-channel" ${connected ? 'disabled' : ''}>${options}</select>` +
-          `<small class="field-help">Optional shortcut — choosing a channel fills the Voice Channel ID above. Lobster needs View Channel, Connect, and Speak permissions.</small></div>`
-        : '<div class="hint warning">No voice channels are visible in this server, or Lobster cannot see them. You can still paste a channel ID above, but check channel permissions.</div>'}` +
+      channelField +
       `<div class="form-actions">` +
-      `<button class="button primary" type="button" data-action="voice-connect" ${connected || busy ? 'disabled' : ''}>Connect</button>` +
+      `<button class="button primary" type="button" data-action="voice-connect" ${connected || busy || !channels.length ? 'disabled' : ''}>Connect</button>` +
       `<button class="button danger" type="button" data-action="voice-disconnect" ${connected || busy ? '' : 'disabled'}>Disconnect</button>` +
       `</div></div>` +
+      `<div class="card">${cardHead('Microphone & deafen', 'Control how Lobster appears while connected to voice.')}` +
+      `<div class="switch-row"><div class="switch-copy"><strong>Microphone</strong><small>${voice.selfMute ? 'Closed — Lobster is muted.' : 'Open — Lobster can transmit audio.'}</small></div>` +
+      `<button class="button secondary small" type="button" data-action="voice-mute" data-muted="${voice.selfMute ? '1' : '0'}" ${connected ? '' : 'disabled'}>${voice.selfMute ? 'Open microphone' : 'Close microphone'}</button></div>` +
+      `<div class="switch-row"><div class="switch-copy"><strong>Deafen</strong><small>${voice.selfDeaf ? 'Closed — Lobster cannot hear the channel.' : 'Open — Lobster can hear the channel.'}</small></div>` +
+      `<button class="button secondary small" type="button" data-action="voice-deafen" data-deafened="${voice.selfDeaf ? '1' : '0'}" ${connected ? '' : 'disabled'}>${voice.selfDeaf ? 'Open deafen' : 'Close deafen'}</button></div>` +
+      `</div>` +
+      `<div class="card">${cardHead('Voice recorder', 'Record the audio of members in the connected voice channel.')}` +
+      `<p class="muted" id="voice-recording-status">${recording.active ? `Recording · ${recording.participants} speaker(s) captured.` : 'Not recording.'}</p>` +
+      `<div class="form-actions">` +
+      `<button class="button primary" type="button" data-action="voice-record-start" ${connected && !recording.active ? '' : 'disabled'}>Start recording</button>` +
+      `<button class="button danger" type="button" data-action="voice-record-stop" ${recording.active ? '' : 'disabled'}>Stop recording</button>` +
+      `</div>` +
+      `<div id="voice-recordings">${recordingsList(recordings)}</div>` +
+      `<div class="hint">Lobster must be undeafened to capture audio; starting a recording opens its deafen automatically. Recordings are saved on the bot host as Ogg/Opus files. Only record where everyone involved has consented.</div>` +
+      `</div>` +
       `<div class="card">${cardHead('Auto-reconnect', 'Rejoin the saved channel automatically if the connection drops.')}` +
       `<div class="switch-row"><div class="switch-copy"><strong>Auto-reconnect</strong><small>Remember this channel and rejoin it after a disconnect or bot restart.</small></div>` +
       `<label class="switch"><input type="checkbox" id="voice-auto-reconnect" ${voice.autoReconnect ? 'checked' : ''} aria-label="Auto-reconnect"><span></span></label></div>` +
@@ -584,7 +641,7 @@
     voiceStatusTimer = null;
   }
 
-  function applyVoiceStatus(voice) {
+  function applyVoiceStatus(voice, recordings) {
     const connected = Boolean(voice.connected);
     const busy = ['connecting', 'signalling'].includes(voice.status);
     const status = document.getElementById('voice-status');
@@ -601,16 +658,42 @@
     const disconnectButton = document.querySelector('[data-action="voice-disconnect"]');
     if (connectButton) connectButton.disabled = connected || busy;
     if (disconnectButton) disconnectButton.disabled = !(connected || busy);
-    for (const id of ['f-voice-server-id', 'f-voice-channel-id', 'f-voice-channel']) {
-      const input = document.getElementById(id);
-      if (input) input.disabled = connected;
+    const channelSelect = document.getElementById('f-voice-channel');
+    if (channelSelect) channelSelect.disabled = connected;
+
+    const muteButton = document.querySelector('[data-action="voice-mute"]');
+    if (muteButton) {
+      muteButton.disabled = !connected;
+      muteButton.dataset.muted = voice.selfMute ? '1' : '0';
+      muteButton.textContent = voice.selfMute ? 'Open microphone' : 'Close microphone';
+    }
+    const deafenButton = document.querySelector('[data-action="voice-deafen"]');
+    if (deafenButton) {
+      deafenButton.disabled = !connected;
+      deafenButton.dataset.deafened = voice.selfDeaf ? '1' : '0';
+      deafenButton.textContent = voice.selfDeaf ? 'Open deafen' : 'Close deafen';
+    }
+    const recording = voice.recording || { active: false };
+    const startButton = document.querySelector('[data-action="voice-record-start"]');
+    const stopButton = document.querySelector('[data-action="voice-record-stop"]');
+    if (startButton) startButton.disabled = !connected || recording.active;
+    if (stopButton) stopButton.disabled = !recording.active;
+    const recordingStatus = document.getElementById('voice-recording-status');
+    if (recordingStatus) {
+      recordingStatus.textContent = recording.active
+        ? `Recording · ${recording.participants} speaker(s) captured.`
+        : 'Not recording.';
+    }
+    if (recordings) {
+      const container = document.getElementById('voice-recordings');
+      if (container) container.innerHTML = recordingsList(recordings);
     }
   }
 
   function startVoiceStatusPolling() {
     stopVoiceStatusPolling();
     if (state.page !== 'voice' || !state.selectedGuild) return;
-    voiceStatusTimer = setInterval(async () => {
+    const tick = async () => {
       if (state.page !== 'voice' || !state.selectedGuild) {
         stopVoiceStatusPolling();
         return;
@@ -619,11 +702,14 @@
         const result = await api(`/api/guilds/${encodeURIComponent(state.selectedGuild)}/voice`);
         state.data.voice = result.voice;
         if (Array.isArray(result.channels)) state.data.voiceChannels = result.channels;
-        applyVoiceStatus(result.voice);
+        state.data.voiceRecordings = result.recordings || [];
+        applyVoiceStatus(result.voice, result.recordings);
       } catch {
         // Ignore transient polling failures and keep the last confirmed status.
       }
-    }, 5000);
+    };
+    tick();
+    voiceStatusTimer = setInterval(tick, 5000);
   }
 
   function render() {
@@ -760,19 +846,14 @@
       }
     } else if (['voice-connect', 'voice-disconnect'].includes(action.dataset.action)) {
       const isConnect = action.dataset.action === 'voice-connect';
-      const serverId = document.getElementById('f-voice-server-id')?.value.trim();
-      const channelId = document.getElementById('f-voice-channel-id')?.value.trim();
-      if (isConnect) {
-        if (!serverId || !/^\d{17,20}$/.test(serverId)) return showToast('Enter a valid 17–20 digit Server ID.', true);
-        if (serverId !== state.selectedGuild) return showToast('Server ID must match the server selected at the top.', true);
-        if (!channelId || !/^\d{17,20}$/.test(channelId)) return showToast('Enter a valid 17–20 digit Voice Channel ID.', true);
-      }
+      const channelId = document.getElementById('f-voice-channel')?.value;
+      if (isConnect && !channelId) return showToast('Pick a voice channel first.', true);
       action.disabled = true;
       state.voicePending = true;
       try {
         const result = await api(`/api/guilds/${encodeURIComponent(state.selectedGuild)}/voice/${isConnect ? 'connect' : 'disconnect'}`, {
           method: 'POST',
-          body: JSON.stringify(isConnect ? { serverId, channelId } : {})
+          body: JSON.stringify(isConnect ? { channelId } : {})
         });
         state.data.voice = result.voice;
         render();
@@ -782,6 +863,47 @@
         showToast(error.message, true);
       } finally {
         state.voicePending = false;
+      }
+    } else if (['voice-mute', 'voice-deafen'].includes(action.dataset.action)) {
+      const isMute = action.dataset.action === 'voice-mute';
+      const current = isMute ? action.dataset.muted === '1' : action.dataset.deafened === '1';
+      action.disabled = true;
+      try {
+        const result = await api(`/api/guilds/${encodeURIComponent(state.selectedGuild)}/voice/${isMute ? 'mute' : 'deafen'}`, {
+          method: 'POST',
+          body: JSON.stringify(isMute ? { mute: !current } : { deafen: !current })
+        });
+        state.data.voice = result.voice;
+        applyVoiceStatus(result.voice);
+        showToast(result.message || 'Voice state updated.');
+      } catch (error) {
+        action.disabled = false;
+        showToast(error.message, true);
+      }
+    } else if (['voice-record-start', 'voice-record-stop'].includes(action.dataset.action)) {
+      const isStart = action.dataset.action === 'voice-record-start';
+      action.disabled = true;
+      try {
+        const result = await api(`/api/guilds/${encodeURIComponent(state.selectedGuild)}/voice/recording/${isStart ? 'start' : 'stop'}`, {
+          method: 'POST',
+          body: '{}'
+        });
+        state.data.voice = result.voice;
+        state.data.voiceRecordings = result.recordings || [];
+        applyVoiceStatus(result.voice, result.recordings);
+        showToast(result.message || 'Recording updated.');
+      } catch (error) {
+        action.disabled = false;
+        showToast(error.message, true);
+      }
+    } else if (action.dataset.action === 'download-recording') {
+      action.disabled = true;
+      try {
+        await downloadRecording(action.dataset.session, action.dataset.file);
+      } catch (error) {
+        showToast(error.message, true);
+      } finally {
+        action.disabled = false;
       }
     } else if (action.dataset.action === 'logout') {
       try {
@@ -855,11 +977,6 @@
         } finally {
           input.disabled = false;
         }
-        return;
-      }
-      if (input instanceof HTMLSelectElement && input.id === 'f-voice-channel') {
-        const channelInput = document.getElementById('f-voice-channel-id');
-        if (channelInput && input.value) channelInput.value = input.value;
         return;
       }
       if (input instanceof HTMLInputElement && input.type === 'checkbox'
