@@ -39,7 +39,7 @@
     levels: 'Level system',
     replies: 'Auto replies',
     security: 'Security',
-    voice: 'Voice manager',
+    voice: 'Voice joiner',
     server: 'Server tools'
   };
   const directPages = {
@@ -61,7 +61,8 @@
     selectedGuild: null,
     data: null,
     page: directPages[window.location.pathname.replace(/\/+$/, '')] || 'overview',
-    toastTimer: null
+    toastTimer: null,
+    voicePending: false
   };
   const loginView = document.getElementById('login-view');
   const appView = document.getElementById('app-view');
@@ -129,6 +130,7 @@
   }
 
   function showLogin(message = '') {
+    stopVoiceStatusPolling();
     appView.hidden = true;
     loginView.hidden = false;
     if (message) showLoginError(message);
@@ -287,7 +289,7 @@
       quickAction('security', 'Security & raid guards', 'Review join protection and anti-nuke controls.', '◈') +
       quickAction('levels', 'Level system', 'Manage XP and level-up announcements.', '↗') +
       quickAction('logs', 'Audit logs', 'Choose which server events Lobster logs.', '▤') +
-      quickAction('voice', 'Voice manager', 'Connect the Lobster bot to a voice channel.', '🔊') +
+      quickAction('voice', 'Voice joiner', 'Connect the Lobster bot to a voice channel.', '🔊') +
       quickAction('server', 'Server tools & reaction roles', 'Configure server tools and member-selected roles.', '☷') +
       `</div><section class="card overview-features">${cardHead('Feature status', `${activeFeatures} of ${features.length} features are enabled · Select a feature to configure it.`)}` +
       `<div class="feature-status-grid">${featureRows}</div></section>` +
@@ -489,22 +491,29 @@
     const statusText = connected
       ? `Connected to ${escapeHTML(voice.channelName || voice.channelId || 'a voice channel')}`
       : busy
-        ? 'Connecting…'
+        ? 'Connecting… Lobster is negotiating the voice connection.'
         : 'Not connected to a voice channel.';
-    const options = '<option value="">Select a voice channel</option>' +
+    const channelId = voice.channelId || '';
+    const options = '<option value="">Select a visible voice channel…</option>' +
       channels.map(channel =>
-        `<option value="${escapeHTML(channel.id)}" ${channel.id === voice.channelId ? 'selected' : ''}>` +
+        `<option value="${escapeHTML(channel.id)}" ${channel.id === channelId ? 'selected' : ''}>` +
         `${channel.category ? `${escapeHTML(channel.category)} / ` : ''}🔊 ${escapeHTML(channel.name)}${channel.userLimit ? ` · ${channel.userLimit} member limit` : ''}</option>`
       ).join('');
-    return pageHeading('Voice manager', 'Connect the official Lobster bot account to a voice channel in this server.') +
-      `<div class="grid"><div class="card">${cardHead('Connection', 'Lobster joins voice with its own bot account. No user account tokens are requested, used, or stored.')}` +
-      `<p class="muted"><span class="online-dot ${connected ? '' : 'is-offline'}"></span>${statusText}</p>` +
+    return pageHeading('Voice joiner', 'Connect the official Lobster bot account to a voice channel using its Server ID and Voice Channel ID.') +
+      `<div class="grid"><div class="card">${cardHead('Connection', 'Lobster joins voice with its own official bot account through Discord’s gateway. No user-account tokens are requested, used, or stored.')}` +
+      `<p id="voice-status" class="muted" aria-live="polite"><span class="online-dot ${connected ? '' : 'is-offline'}"></span>${statusText}</p>` +
+      `<div class="field"><label for="f-voice-server-id">Server ID</label>` +
+      `<input id="f-voice-server-id" type="text" value="${escapeHTML(state.selectedGuild)}" inputmode="numeric" pattern="[0-9]{17,20}" autocomplete="off" spellcheck="false" ${connected ? 'disabled' : ''}>` +
+      `<small class="field-help">Pre-filled with the server selected at the top. A 17–20 digit Discord server (guild) ID.</small></div>` +
+      `<div class="field"><label for="f-voice-channel-id">Voice Channel ID</label>` +
+      `<input id="f-voice-channel-id" type="text" value="${escapeHTML(channelId)}" inputmode="numeric" pattern="[0-9]{17,20}" autocomplete="off" spellcheck="false" ${connected ? 'disabled' : ''}>` +
+      `<small class="field-help">Right-click a voice channel in Discord with Developer Mode on → Copy Channel ID.</small></div>` +
       `${channels.length
-        ? `<div class="field"><label for="f-voice-channel">Voice channel</label><select id="f-voice-channel" ${connected ? 'disabled' : ''}>${options}</select>` +
-          `<small class="field-help">Lobster needs View Channel, Connect, and Speak permissions in the selected channel.</small></div>`
-        : '<div class="hint warning">No voice channels are visible in this server, or Lobster cannot see them. Check channel permissions.</div>'}` +
+        ? `<div class="field"><label for="f-voice-channel">Pick a visible channel</label><select id="f-voice-channel" ${connected ? 'disabled' : ''}>${options}</select>` +
+          `<small class="field-help">Optional shortcut — choosing a channel fills the Voice Channel ID above. Lobster needs View Channel, Connect, and Speak permissions.</small></div>`
+        : '<div class="hint warning">No voice channels are visible in this server, or Lobster cannot see them. You can still paste a channel ID above, but check channel permissions.</div>'}` +
       `<div class="form-actions">` +
-      `<button class="button primary" type="button" data-action="voice-connect" ${connected || busy || !channels.length ? 'disabled' : ''}>Connect</button>` +
+      `<button class="button primary" type="button" data-action="voice-connect" ${connected || busy ? 'disabled' : ''}>Connect</button>` +
       `<button class="button danger" type="button" data-action="voice-disconnect" ${connected || busy ? '' : 'disabled'}>Disconnect</button>` +
       `</div></div>` +
       `<div class="card">${cardHead('Auto-reconnect', 'Rejoin the saved channel automatically if the connection drops.')}` +
@@ -568,11 +577,61 @@
     server: serverPage
   };
 
+  let voiceStatusTimer = null;
+
+  function stopVoiceStatusPolling() {
+    if (voiceStatusTimer) clearInterval(voiceStatusTimer);
+    voiceStatusTimer = null;
+  }
+
+  function applyVoiceStatus(voice) {
+    const connected = Boolean(voice.connected);
+    const busy = ['connecting', 'signalling'].includes(voice.status);
+    const status = document.getElementById('voice-status');
+    if (status) {
+      const text = connected
+        ? `Connected to ${escapeHTML(voice.channelName || voice.channelId || 'a voice channel')}`
+        : busy
+          ? 'Connecting… Lobster is negotiating the voice connection.'
+          : 'Not connected to a voice channel.';
+      status.innerHTML = `<span class="online-dot ${connected ? '' : 'is-offline'}"></span>${text}`;
+    }
+    if (state.voicePending) return;
+    const connectButton = document.querySelector('[data-action="voice-connect"]');
+    const disconnectButton = document.querySelector('[data-action="voice-disconnect"]');
+    if (connectButton) connectButton.disabled = connected || busy;
+    if (disconnectButton) disconnectButton.disabled = !(connected || busy);
+    for (const id of ['f-voice-server-id', 'f-voice-channel-id', 'f-voice-channel']) {
+      const input = document.getElementById(id);
+      if (input) input.disabled = connected;
+    }
+  }
+
+  function startVoiceStatusPolling() {
+    stopVoiceStatusPolling();
+    if (state.page !== 'voice' || !state.selectedGuild) return;
+    voiceStatusTimer = setInterval(async () => {
+      if (state.page !== 'voice' || !state.selectedGuild) {
+        stopVoiceStatusPolling();
+        return;
+      }
+      try {
+        const result = await api(`/api/guilds/${encodeURIComponent(state.selectedGuild)}/voice`);
+        state.data.voice = result.voice;
+        if (Array.isArray(result.channels)) state.data.voiceChannels = result.channels;
+        applyVoiceStatus(result.voice);
+      } catch {
+        // Ignore transient polling failures and keep the last confirmed status.
+      }
+    }, 5000);
+  }
+
   function render() {
     document.querySelectorAll('.nav-item').forEach(button =>
       button.classList.toggle('active', button.dataset.page === state.page)
     );
     if (!state.data) {
+      stopVoiceStatusPolling();
       const hasInstalled = state.guilds.some(guild => guild.installed);
       content.innerHTML = `<div class="empty-state"><strong>${hasInstalled ? 'Choose a server' : 'No installed servers found'}</strong>` +
         `${hasInstalled ? 'Select an installed server from the menu above.' : 'Invite Lobster to a server where you have Manage Server permission, then reload this page.'}</div>`;
@@ -580,6 +639,7 @@
     }
     document.getElementById('breadcrumb-server').textContent = state.data.guild.name;
     content.innerHTML = pageRenderers[state.page]?.() || pageRenderers.overview();
+    startVoiceStatusPolling();
   }
 
   async function saveSettings(form) {
@@ -700,13 +760,19 @@
       }
     } else if (['voice-connect', 'voice-disconnect'].includes(action.dataset.action)) {
       const isConnect = action.dataset.action === 'voice-connect';
-      const channelId = document.getElementById('f-voice-channel')?.value;
-      if (isConnect && !channelId) return showToast('Choose a voice channel first.', true);
+      const serverId = document.getElementById('f-voice-server-id')?.value.trim();
+      const channelId = document.getElementById('f-voice-channel-id')?.value.trim();
+      if (isConnect) {
+        if (!serverId || !/^\d{17,20}$/.test(serverId)) return showToast('Enter a valid 17–20 digit Server ID.', true);
+        if (serverId !== state.selectedGuild) return showToast('Server ID must match the server selected at the top.', true);
+        if (!channelId || !/^\d{17,20}$/.test(channelId)) return showToast('Enter a valid 17–20 digit Voice Channel ID.', true);
+      }
       action.disabled = true;
+      state.voicePending = true;
       try {
         const result = await api(`/api/guilds/${encodeURIComponent(state.selectedGuild)}/voice/${isConnect ? 'connect' : 'disconnect'}`, {
           method: 'POST',
-          body: JSON.stringify(isConnect ? { channelId } : {})
+          body: JSON.stringify(isConnect ? { serverId, channelId } : {})
         });
         state.data.voice = result.voice;
         render();
@@ -714,6 +780,8 @@
       } catch (error) {
         action.disabled = false;
         showToast(error.message, true);
+      } finally {
+        state.voicePending = false;
       }
     } else if (action.dataset.action === 'logout') {
       try {
@@ -787,6 +855,11 @@
         } finally {
           input.disabled = false;
         }
+        return;
+      }
+      if (input instanceof HTMLSelectElement && input.id === 'f-voice-channel') {
+        const channelInput = document.getElementById('f-voice-channel-id');
+        if (channelInput && input.value) channelInput.value = input.value;
         return;
       }
       if (input instanceof HTMLInputElement && input.type === 'checkbox'
