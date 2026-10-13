@@ -6,6 +6,7 @@
     <meta name="description" content="Privacy Policy for Lobster, a Discord server management bot.">
     <title>Privacy Policy — Lobster</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="/privacy.js" defer></script>
   </head>
   <body>
     <main class="shell document">
@@ -19,6 +20,17 @@
         <p class="updated">Last updated: October 13, 2026</p>
         <p>This Privacy Policy explains how the operator of Lobster (“Lobster,” “we,” or “us”) handles information when you use the Lobster Discord bot. Lobster is a Discord bot for server setup, moderation, welcome and farewell messages, tickets, giveaways, utilities, and chat levels. This policy covers Lobster’s handling of information; Discord independently handles information under its own policies.</p>
 
+        <h2>Website visitor logging</h2>
+        <p>This section covers the Lobster website only, not the Discord bot. When you browse the site and accept the on-page privacy banner, we log a small set of technical data:</p>
+        <ul>
+          <li><strong>What we log:</strong> your IP address, your country (which our host derives from your IP), the page you visited, your browser’s user agent, and the referring page. We do not log your city, postal code, or other precise location.</li>
+          <li><strong>Why:</strong> security and abuse prevention, and aggregate traffic statistics. We do not use it to identify or profile you.</li>
+          <li><strong>How it is stored:</strong> in our cloud database, with the IP address <span data-config="hashing">stored as-is</span>.</li>
+          <li><strong>How long:</strong> up to <span data-config="retention">30</span> days, after which records are deleted automatically.</li>
+          <li><strong>Your choice:</strong> logging starts only after you click “Accept” on the banner. If you click “Decline”, nothing is logged. You can change your mind by clearing this site’s local storage, which resets the banner.</li>
+          <li><strong>Deletion requests:</strong> email <a data-config="contact" href="mailto:privacy@example.com">privacy@example.com</a> to request deletion of records associated with you, and we will remove matching entries.</li>
+        </ul>
+
         <h2>1. Information Lobster processes</h2>
         <p>Lobster receives information from Discord when it is installed in a server or used. Depending on enabled features and commands, this may include:</p>
         <ul>
@@ -30,7 +42,7 @@
           <li>Message text while it is processed to handle commands, configured auto-replies, counting, or enabled AutoMod filters. AutoMod may temporarily keep message hashes and timestamps in memory to detect duplicates or message floods.</li>
           <li>If a server administrator explicitly enables automatic backups with <code>/backup enable</code> or requests a one-off snapshot with <code>/backup create</code>, Lobster saves message text and metadata from accessible text channels and active threads, along with server role and channel settings. Backups are disabled by default.</li>
           <li>When a server administrator enables ticket transcripts, message text, attachment URLs, timestamps, and author names from a closed ticket are collected to generate a transcript. This transcript is posted as a file to the administrator-selected transcript channel in Discord; it is not saved in Lobster’s local database.</li>
-          <li>Website visitors: when you open the Lobster website or web dashboard, the hosting provider and a lightweight visitor-logging endpoint record ordinary web request data, including your IP address, an approximate location derived from that IP (for example, country or city), browser user agent, and the page you visited. Lobster uses this data to understand traffic and keep the site working; it is not used to identify or profile a specific visitor.</li>
+          <li>Website visitors: when you open the Lobster website or web dashboard and accept the privacy banner, the hosting provider and a lightweight visitor-logging endpoint record ordinary web request data, including your IP address, an approximate location derived from that IP (country only), browser user agent, and the page you visited. Lobster uses this data to keep the site secure and understand traffic; it is not used to identify or profile a specific visitor. See the “Website visitor logging” section above for details and retention.</li>
         </ul>
 
         <h2>2. How information is used</h2>

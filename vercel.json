@@ -15,7 +15,10 @@
     { "source": "/replies", "destination": "/dashboard" },
     { "source": "/security", "destination": "/dashboard" },
     { "source": "/voice", "destination": "/dashboard" },
-    { "source": "/server", "destination": "/dashboard" }
+      { "source": "/server", "destination": "/dashboard" }
+  ],
+  "crons": [
+    { "path": "/api/cleanup", "schedule": "0 4 * * *" }
   ],
   "headers": [
     {

@@ -1,123 +1,148 @@
-const KV_KEY = 'visitor_logs';
+const { hasStorage, hashIp, saveRecord } = require('./_store');
 
-function header(req, name) {
+const LIMITS = { ip: 45, country: 8, path: 512, referrer: 512, user_agent: 512 };
+const RATE_WINDOW_MS = 60 * 60 * 1000;
+const RATE_MAX = 60;
+const MAX_BODY_BYTES = 4096;
+
+const buckets = new Map();
+
+function readHeader(req, name) {
   const value = req.headers[name] || req.headers[name.toLowerCase()];
-  return typeof value === 'string' && value.length ? value.trim() : null;
+  return typeof value === 'string' && value.length > 0 ? value.trim() : null;
+}
+
+function limit(value, max) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
 }
 
 function clientIp(req) {
-  const xff = header(req, 'x-forwarded-for');
-  return (
-    header(req, 'x-vercel-forwarded-for') ||
-    (xff ? xff.split(',')[0].trim() : null) ||
-    header(req, 'x-real-ip') ||
-    null
-  );
-}
-
-function buildRecord(req, body) {
-  return {
-    ip: clientIp(req),
-    country: header(req, 'x-vercel-ip-country'),
-    country_region: header(req, 'x-vercel-ip-country-region'),
-    city: header(req, 'x-vercel-ip-city'),
-    latitude: header(req, 'x-vercel-ip-latitude'),
-    longitude: header(req, 'x-vercel-ip-longitude'),
-    timezone: header(req, 'x-vercel-ip-timezone'),
-    asn: header(req, 'x-vercel-ip-asn'),
-    user_agent: header(req, 'user-agent'),
-    path: body.path || null,
-    referrer: body.referrer || null,
-    created_at: new Date().toISOString(),
-  };
+  const forwarded = readHeader(req, 'x-forwarded-for');
+  if (forwarded) {
+    const first = forwarded.split(',')[0].trim();
+    if (first) return first;
+  }
+  return readHeader(req, 'x-vercel-forwarded-for') || readHeader(req, 'x-real-ip') || null;
 }
 
 function readRawBody(req) {
   return new Promise((resolve) => {
-    let data = '';
+    let size = 0;
+    const chunks = [];
     req.on('data', (chunk) => {
-      data += chunk;
-      if (data.length > 100000) {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
         req.destroy();
         resolve('');
+        return;
       }
+      chunks.push(chunk);
     });
-    req.on('end', () => resolve(data));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', () => resolve(''));
   });
 }
 
 async function parseBody(req) {
+  let raw = '';
   if (req.body !== undefined && req.body !== null) {
-    return typeof req.body === 'object' ? req.body : safeParse(req.body);
+    if (typeof req.body === 'object') return req.body;
+    raw = String(req.body);
+  } else {
+    raw = await readRawBody(req);
   }
-  return safeParse(await readRawBody(req));
-}
-
-function safeParse(str) {
   try {
-    const parsed = JSON.parse(str);
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
   } catch (_) {
     return {};
   }
 }
 
-async function saveToKv(record) {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (!url || !token) return false;
-  const res = await fetch(`${url.replace(/\/$/, '')}/lpush/${KV_KEY}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify([JSON.stringify(record)]),
-  });
-  return res.ok;
+function allowedOrigin(req) {
+  const origin = readHeader(req, 'origin');
+  if (!origin) return null;
+  const allowed = new Set();
+  const host = readHeader(req, 'host');
+  if (host) allowed.add(`https://${host}`);
+  (process.env.ALLOWED_ORIGIN || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .forEach((value) => allowed.add(value));
+  return allowed.has(origin) ? origin : null;
 }
 
-async function saveToSupabase(record) {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return false;
-  const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/visitor_logs`, {
-    method: 'POST',
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    },
-    body: JSON.stringify(record),
-  });
-  return res.ok;
+function applyCors(req, res) {
+  const origin = allowedOrigin(req);
+  if (!origin) return;
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+function rateLimited(ip) {
+  const now = Date.now();
+  if (buckets.size > 10000) {
+    for (const [key, value] of buckets) {
+      if (now - value.start > RATE_WINDOW_MS) buckets.delete(key);
+    }
+  }
+  const bucket = buckets.get(ip);
+  if (!bucket || now - bucket.start > RATE_WINDOW_MS) {
+    buckets.set(ip, { start: now, count: 1 });
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > RATE_MAX;
 }
 
 module.exports = async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  applyCors(req, res);
+
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.status(204).end();
+    return;
+  }
+  if (req.method !== 'GET' && req.method !== 'POST') {
     res.status(204).end();
     return;
   }
 
-  if (req.method !== 'GET' && req.method !== 'POST') {
-    res.status(405).end();
+  if (!hasStorage()) {
+    res.status(204).end();
+    return;
+  }
+
+  const ip = clientIp(req);
+  if (!ip || rateLimited(ip)) {
+    res.status(204).end();
     return;
   }
 
   const body = await parseBody(req);
-  const record = buildRecord(req, body);
+  const storedIp = hashIp(limit(ip, LIMITS.ip));
+  const country = readHeader(req, 'x-vercel-ip-country');
 
-  if (!record.ip) {
-    res.setHeader('Cache-Control', 'no-store');
-    res.status(204).end();
-    return;
+  const record = {
+    ip: storedIp ? storedIp.slice(0, 128) : null,
+    country: country ? country.toUpperCase().slice(0, LIMITS.country) : null,
+    path: limit(body.path, LIMITS.path),
+    referrer: limit(body.referrer, LIMITS.referrer),
+    user_agent: limit(readHeader(req, 'user-agent'), LIMITS.user_agent),
+    created_at: new Date().toISOString(),
+  };
+
+  if (record.ip) {
+    try {
+      await saveRecord(record);
+    } catch (_) {}
   }
 
-  await saveToKv(record);
-  await saveToSupabase(record);
-
-  res.setHeader('Cache-Control', 'no-store');
   res.status(204).end();
 };
