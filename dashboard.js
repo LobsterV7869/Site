@@ -357,7 +357,7 @@
         selectField('welcomeChannel', 'Welcome channel', s.welcomeChannel, channelOptions(s.welcomeChannel)) +
         field('welcomeTitle', 'Card title', s.welcomeTitle, 'text', 'Maximum 256 characters.', 'maxlength="256"') +
         `<div class="field"><label for="f-welcomeMessage">Message</label><textarea id="f-welcomeMessage" name="welcomeMessage" maxlength="2000">${escapeHTML(s.welcomeMessage)}</textarea><small class="field-help">Placeholders: {user}, {username}, {server}, {membercount}, {created}, {joined}, {id}.</small></div>` +
-        `<div class="form-row">${field('welcomeImage', 'Image URL', s.welcomeImage || '', 'url', 'Optional HTTPS or HTTP image.')}${field('welcomeColor', 'Embed color', s.welcomeColor || '#FF6B35', 'color')}</div>`) +
+        `<div class="form-row">${field('welcomeImage', 'Image URL', s.welcomeImage || '', 'url', 'Optional HTTPS or HTTP image.')}${field('welcomeColor', 'Embed color', s.welcomeColor || '#5BA6FB', 'color')}</div>`) +
       `</div><div class="card">${cardHead('Farewell message', 'Sent when a member leaves.')}` +
       sectionForm(toggle('farewellEnabled', 'Farewell messages', 'Send a goodbye when a member leaves.', s.farewellEnabled) +
         selectField('farewellChannel', 'Farewell channel', s.farewellChannel, channelOptions(s.farewellChannel)) +
@@ -600,7 +600,7 @@
       `${cards || '<div class="empty-state">No editable roles are available.</div>'}</div>` +
       `<div><div class="card">${cardHead('Create a role', 'New roles are created without extra permissions.')}` +
       `<form data-form="create-role">${field('name', 'Role name', '', 'text', 'Maximum 100 characters.', 'maxlength="100" required')}` +
-      `<div class="field"><label for="new-role-color">Role color</label><input id="new-role-color" name="color" type="color" value="#FF6B35"></div>` +
+      `<div class="field"><label for="new-role-color">Role color</label><input id="new-role-color" name="color" type="color" value="#5BA6FB"></div>` +
       `<div class="form-actions"><button class="button primary" type="submit">Create role</button></div></form></div>` +
       `<div class="card warning" style="margin-top:17px">${cardHead('Role hierarchy matters')}` +
       `<p class="muted">You need Manage Roles in Discord. Lobster’s highest role and your own highest role must be above the role you edit. Managed roles and roles above Lobster are read-only. Deleting a role removes it from every member who has it.</p>` +
